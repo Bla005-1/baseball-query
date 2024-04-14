@@ -312,9 +312,12 @@ def retrieve_data(pk_dict, output_queue: queue.Queue):
     for plays in get_plays(pk_dict, output_queue):
         data_queue.put(plays)
 
+
 counted_games = 0
 overwritten_plays = 0
 total_plays = 0
+
+
 def insert_batch_data(batch: list[list[dict]]):
     conn, cursor = connect()
     columns = [str(x) for x in db_keys.keys()]

@@ -1,6 +1,5 @@
-import sqlite3
 import math
-from utils import DataRow, DataRowContainer, connect
+from utils import connect, dict_factory
 
 pitch_names = [
     'Sinker', 'Slider', 'Changeup', 'Curveball', 'Cutter', '4-Seam Fastball',
@@ -9,150 +8,92 @@ pitch_names = [
 ]
 
 
-def basic_pitch_calcs(data: DataRowContainer[DataRow]):
-    name = data[0]['pitcher_name']
-    strikeouts = 0
-    walks = 0
-    d_dict = data.sort_by('game_pk')
-    innings = 0
-    batters_faced = 0
-    er = 0
-    for game_pk, container in d_dict.items():
-        query = 'SELECT * FROM all_plays WHERE game_pk = ? AND team_fielding = ? GROUP BY inning, ab_number'
-        conn, cursor = connect()
-        cursor.row_factory = sqlite3.Row
-        cursor.execute(query, (game_pk, container.get('team_fielding')[0]))
-        plays = cursor.fetchall()
-        conn.close()
-        for index, play in enumerate(plays):
-            if play['events'] == 'Home Run':
-                er += 1
-            if 'scores' in play['des']:
-                for event in play['des'].split('.'):
-                    event: str
-                    if 'scores' in event:
-                        if index == 0:
-                            if 'Error' not in plays[0]['events'] and plays[0]['events'] != 'Passed Ball':
-                                er += 1
-                            else:
-                                print('didnt count')
-                        else:
-                            event = event.replace('scores', '')
-                            batter_name = event.strip()
-                            for i in range(index-1, -1, -1):
-                                if batter_name == plays[i]['batter_name']:
-                                    if plays[i]['pitcher_name'] == name:
-                                        if 'Error' not in plays[i]['events'] and plays[i]['events'] != 'Passed Ball':
-                                            er += 1
-                                        else:
-                                            print(play['des'])
-                                            print(plays[i]['des'])
-                                            print('didnt count either')
-                                    break
-
-        innings += len(set(container.get('inning')))
-
-        batters_faced += len(set(container.get('ab_number')))
-        for d in container.sort_by('ab_number').values():
-            events = d.get('events')
-            if 'Strikeout' in events:
-                strikeouts += 1
-            elif 'Walk' in events or 'Hit By Pitch' in events or 'Balk' in events or 'Intent Walk' in events:
-                walks += 1
-    k = strikeouts / batters_faced * 100 if batters_faced > 0 else 0
-    walk_p = walks / batters_faced * 100 if batters_faced > 0 else 0
-    era = (9 * er) / innings
-    return {'IP': innings, 'ERA': '{:.2f}'.format(era), 'K %': '{:.2f}'.format(k), 'BB %': '{:.2f}'.format(walk_p)}
-
-
-def get_matching_search(name: str, league: str, team: str, dates: tuple, player_type: str) -> list[sqlite3.Row]:
-    conditions = [dates[0], dates[1]]
-    if player_type == 'pitcher':
-        query = f'SELECT DISTINCT pitcher_name, league, team_fielding FROM all_plays WHERE date BETWEEN ? AND ?'
-        if name:
-            query += ' AND LOWER(pitcher_name) LIKE ?'
-            conditions.append('%' + name.lower() + '%')
-        if league:
-            query += ' AND LOWER(league) = ?'
-            conditions.append(league.lower())
-        if team:
-            query += ' AND LOWER(team_fielding) = ?'
-            conditions.append(team.lower())
-        query += ' GROUP BY pitcher_name, league'
-    else:
-        query = f'SELECT DISTINCT batter_name, league, team_batting FROM all_plays WHERE date BETWEEN ? AND ?'
-        if name:
-            query += ' AND LOWER(batter_name) LIKE ?'
-            conditions.append('%' + name.lower() + '%')
-        if league:
-            query += ' AND LOWER(league) = ?'
-            conditions.append(league.lower())
-        if team:
-            query += ' AND LOWER(team_batting) = ?'
-            conditions.append(team.lower())
-        query += ' GROUP BY batter_name, league'
+def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
+    args = [name, dates[0], dates[1]]
+    query1 = 'SELECT * FROM era_pointers WHERE pitcher_name = ? AND date BETWEEN ? AND ?'
+    query2 = '''
+            SELECT pitcher_name, events, outs, inning, game_pk
+            FROM all_plays
+            WHERE pitcher_name = ? AND date BETWEEN ? AND ?'
+            '''
+    if league:
+        query1 += ' AND league = ?'
+        query2 += ' AND league = ?'
+        args.append(league)
+    query2 += 'GROUP BY game_pk, ab_number ORDER BY game_pk, ab_number'
     conn, cursor = connect()
-    cursor.execute(query, conditions)
+    cursor.execute(query1, args)
+    er_plays = cursor.fetchall()
+    cursor.row_factory = dict_factory
+    cursor.execute(query2, args)
     rows = cursor.fetchall()
     conn.close()
-    result = []
-    current_name = None
-    for index, tup in enumerate(rows):
-        name, league, team = tup
+    current_inning = None
+    current_game = None
+    current_out = 0
+    ip = 0
+    walks = 0
+    strikeouts = 0
+    batters_faced = 0
+    for row in rows:
+        batters_faced += 1
+        game_pk = row['game_pk']
+        outs = row['outs']
+        inning = row['inning']
+        if game_pk != current_game:
+            current_game = game_pk
+            current_out = outs
+        if inning != current_inning:
+            current_out = outs
+            current_inning = inning
+        if outs != current_out:
+            ip += (1/3)
+        event = row['events']
+        if event == 'Walk':
+            walks += 1
+        elif 'strikeout' in event.lower():
+            strikeouts += 1
+    era = 9 * len(er_plays) / ip
+    k = strikeouts / batters_faced * 100
+    bb = walks / batters_faced * 100
+    return {'IP': ip, 'ERA': '{:.2f}'.format(era), 'K %': '{:.2f}'.format(k), 'BB %': '{:.2f}'.format(bb)}
 
-        if name != current_name:
-            if index != len(rows) - 1:
-                if rows[index+1][0] == name:
-                    result.append((name, '', ''))
-            current_name = name
 
-        result.append(tup)
-
-    return result
-
-
-def get_pitcher_data(name: str, league: str, dates: tuple) -> DataRowContainer[DataRow]:
+# could make get_data a common function between pitch and batt since only query is different
+def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
     args = [dates[0], dates[1], name]
-    pitch_query = f'''
-            SELECT *
-            FROM all_plays
-            WHERE date BETWEEN ? AND ? AND pitcher_name = ?
+    pitch_query = '''
+        SELECT
+            pitch_name,
+            COUNT(*) AS total_pitches,
+            AVG(start_speed) AS avg_start_speed,
+            MAX(start_speed) AS max_start_speed,
+            AVG(spin_rate) AS avg_spin_rate,
+            AVG(breakZ) AS avg_breakZ,
+            AVG(breakX) AS avg_breakX,
+            SUM(CASE WHEN LOWER(description) LIKE '%strike%' OR LOWER(description) LIKE '%foul tip%' OR 
+             LOWER(description) LIKE '%swinging pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
+            SUM(CASE WHEN LOWER(description) LIKE '%swinging%' OR LOWER(description) 
+             LIKE '%foul tip%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS swinging_strike_percentage,
+            SUM(CASE WHEN LOWER(description) LIKE '%ball%' OR LOWER(description) LIKE '%hit by%' OR LOWER(description) 
+             LIKE '%pitchout%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS ball_percentage
+        FROM all_plays
+        WHERE date BETWEEN ? AND ? 
+        AND pitch_name IS NOT NULL
         '''
     if league:
         pitch_query += ' AND league = ?'
         args.append(league)
+
+    total_query = pitch_query.replace('pitch_name,', '"Total" AS pitch_name,')
+    pitch_query += 'GROUP BY pitch_name'
+
     conn, cursor = connect()
-    cursor.row_factory = sqlite3.Row
-    cursor.execute(pitch_query, args)
+    cursor.row_factory = dict_factory
+    cursor.execute(pitch_query + '\nUNION ALL\n' + total_query, args)
     rows = cursor.fetchall()
     conn.close()
-    pitcher_data = DataRowContainer([DataRow(r) for r in rows])
-    return pitcher_data
-
-
-def pitch_calcs(name: str, rows: DataRowContainer[DataRow]) -> tuple:
-    descriptions = rows.get('description')
-    strikes = 0
-    balls = 0
-    swinging_strikes = 0
-    for d in descriptions:
-        if 'strike' in d.lower() or 'foul tip' in d.lower() or 'swinging pitchout' in d.lower():
-            strikes += 1
-        if 'swinging' in d.lower() or 'foul tip' in d.lower():
-            swinging_strikes += 1
-        if 'ball' in d.lower() or 'hit by' in d.lower() or 'pitchout' in d.lower():
-            balls += 1
-    return (
-        name, len(rows),
-        '{:.2f}'.format(sum(rows.get('start_speed')) / len(rows.get('start_speed')) if rows.get('start_speed') else 0),
-        '{:.2f}'.format(max(rows.get('start_speed')) if rows.get('start_speed') else 0),
-        '{:.2f}'.format(sum(rows.get('spin_rate')) / len(rows.get('spin_rate')) if rows.get('spin_rate') else 0),
-        '{:.2f}'.format(sum(rows.get('breakZ')) / len(rows.get('breakZ')) if rows.get('breakZ') else 0),
-        '{:.2f}'.format(sum(rows.get('breakX')) / len(rows.get('breakX')) if rows.get('breakX') else 0),
-        '{:.2f}'.format(strikes / len(rows) * 100),
-        '{:.2f}'.format(swinging_strikes / len(rows) * 100),
-        '{:.2f}'.format((len(rows) - balls) / len(rows) * 100)
-    )
+    return rows
 
 
 def build_calcs_query(leagues: list[str], total=False):
@@ -225,7 +166,7 @@ def pitch_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tu
     return averages, ranges
 
 
-def calc_release_pos(data: DataRow) -> tuple[float, float]:
+def calc_release_pos(data) -> tuple[float, float]:
     # going to need to make this work with null values
     x0 = data['x0']
     y0 = data['y0']

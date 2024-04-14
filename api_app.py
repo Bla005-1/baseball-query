@@ -11,8 +11,7 @@ def get_pitcher(league, name, start_date, end_date):
     if league == 'None':
         league = None
     r = get_pitcher_data(name, league, (start_date, end_date))
-    basic_calcs = basic_pitch_calcs(r)
-    return basic_calcs
+    return r
 
 
 def get_batter(league, name, start_date, end_date):
@@ -20,4 +19,4 @@ def get_batter(league, name, start_date, end_date):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80)
+    app.run(host='0.0.0.0', port=8080)

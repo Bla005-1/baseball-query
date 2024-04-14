@@ -1,7 +1,7 @@
 import sqlite3
 import time
 import numpy as np
-from utils import DataRow, DataRowContainer, connect
+from utils import connect, dict_factory
 
 at_bat_events = [
     'Double', 'Strikeout', 'Flyout', 'Single', 'Forceout', 'Pop Out', 'Groundout',
@@ -11,23 +11,37 @@ at_bat_events = [
 ]
 
 
-def get_batter_data(name: str, league: str, dates: tuple) -> DataRowContainer[DataRow]:
+def get_batter_data(name: str, league: str, dates: tuple) -> dict:
     args = [dates[0], dates[1], name]
-    batt_query = f'''
-                SELECT *
-                FROM all_plays
-                WHERE date BETWEEN ? AND ? AND batter_name = ?
-            '''
+    batt_query = '''
+        SELECT
+            pitch_name,
+            COUNT(*) AS seen,
+            SUM(CASE WHEN LOWER(description) LIKE '%foul%' OR LOWER(description) LIKE '%play%' THEN 1 ELSE 0 END) AS bb,
+            AVG(CAST(hit_speed AS REAL)) AS avg_velo,
+            MAX(CAST(hit_speed AS REAL)) AS max_velo,
+            AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle,
+            CAST(SUM(CASE WHEN description LIKE '%In play%' OR description = 'Foul'
+            THEN 1 ELSE 0 END) AS REAL) / SUM(CASE WHEN description LIKE '%In play%' OR description LIKE '%Foul%' 
+            OR description LIKE '%Swinging%' THEN 1 ELSE 0 END) * 100.0 AS contact_percent,
+            GROUP_CONCAT(IFNULL(hit_speed, 'None'), ',') AS percentile_90
+        FROM all_plays
+        WHERE date BETWEEN ? AND ?
+        AND pitch_name IS NOT NULL
+    '''
     if league:
         batt_query += ' AND league = ?'
         args.append(league)
+
+    total_query = batt_query.replace('pitch_name,', '"Total" AS pitch_name,')
+    batt_query += 'GROUP BY pitch_name'
+
     conn, cursor = connect()
-    cursor.row_factory = sqlite3.Row
-    cursor.execute(batt_query, args)
+    cursor.row_factory = dict_factory
+    cursor.execute(batt_query + '\nUNION ALL\n' + total_query, args)
     rows = cursor.fetchall()
     conn.close()
-    batter_data = DataRowContainer([DataRow(r) for r in rows])
-    return batter_data
+    return rows
 
 
 def batt_calcs(name: str, rows: DataRowContainer[DataRow]) -> tuple:
