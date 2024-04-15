@@ -1,7 +1,6 @@
 import connexion
-from db import connect
 from pitch_data import get_pitcher_data, basic_pitch_calcs
-
+from batter_data import get_batter_data, basic_batt_calcs
 app = connexion.App(__name__, specification_dir='./')
 app.add_api('api.yml')
 
@@ -15,7 +14,11 @@ def get_pitcher(league, name, start_date, end_date):
 
 
 def get_batter(league, name, start_date, end_date):
-    return {'league': 'MLB', 'pitcher_name': 'b dude'}
+    print(league, name, start_date, end_date)
+    if league == 'None':
+        league = None
+    r = get_batter_data(name, league, (start_date, end_date))
+    return r
 
 
 if __name__ == '__main__':

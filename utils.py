@@ -12,6 +12,7 @@ def nested_list(rows: list[dict]):
         if game_pk != current_game:
             if game_list:
                 nested_lists.append(game_list)
+                game_list = []
             current_game = game_pk
         if inning != current_inning:
             if inning_list:

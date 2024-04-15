@@ -14,13 +14,13 @@ def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
     query2 = '''
             SELECT pitcher_name, events, outs, inning, game_pk
             FROM all_plays
-            WHERE pitcher_name = ? AND date BETWEEN ? AND ?'
+            WHERE pitcher_name = ? AND date BETWEEN ? AND ?
             '''
     if league:
         query1 += ' AND league = ?'
         query2 += ' AND league = ?'
         args.append(league)
-    query2 += 'GROUP BY game_pk, ab_number ORDER BY game_pk, ab_number'
+    query2 += ' GROUP BY game_pk, ab_number ORDER BY game_pk, ab_number'
     conn, cursor = connect()
     cursor.execute(query1, args)
     er_plays = cursor.fetchall()
@@ -56,7 +56,7 @@ def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
     era = 9 * len(er_plays) / ip
     k = strikeouts / batters_faced * 100
     bb = walks / batters_faced * 100
-    return {'IP': ip, 'ERA': '{:.2f}'.format(era), 'K %': '{:.2f}'.format(k), 'BB %': '{:.2f}'.format(bb)}
+    return {'IP': ip, 'ERA': '{:.2f}'.format(era), 'K%': '{:.2f}'.format(k), 'BB%': '{:.2f}'.format(bb)}
 
 
 # could make get_data a common function between pitch and batt since only query is different
@@ -194,3 +194,7 @@ def calc_release_pos(data) -> tuple[float, float]:
     z_t = z0 + vz0 * t_y + 0.5 * az * t_y ** 2
 
     return x_t, z_t
+
+
+if __name__ == '__main__':
+    print(basic_pitch_calcs('Ronel Blanco', 'MLB', ('2024-03-20', '2024-04-14')))

@@ -1,13 +1,12 @@
-import sqlite3
 import time
 import numpy as np
 from utils import connect, dict_factory
 
 at_bat_events = [
     'Double', 'Strikeout', 'Flyout', 'Single', 'Forceout', 'Pop Out', 'Groundout',
-    'GIDP', 'Field Error', 'Lineout', 'Fielders Choice', 'Double Play',
-    'Catcher Interference', 'Hit By Pitch', 'Home Run', 'Stolen Base 3B', 'Triple',
-    'Fielders Choice Out', 'Batter Out', 'Field Out'
+    'GIDP', 'Field Error', 'Lineout', 'Fielders Choice', 'Double Play', 'Home Run', 'Stolen Base 3B', 'Triple',
+    'Fielders Choice Out', 'Batter Out', 'Field Out', 'Strikeout Double Play', 'Bunt Pop Out',
+    'Bunt Lineout', 'Bunt Groundout', 'Field Out', 'Batter Out', 'Triple Play', 'Runner Double Play'
 ]
 
 
@@ -40,50 +39,30 @@ def get_batter_data(name: str, league: str, dates: tuple) -> dict:
     cursor.row_factory = dict_factory
     cursor.execute(batt_query + '\nUNION ALL\n' + total_query, args)
     rows = cursor.fetchall()
+    rows = [add_percentile(x) for x in rows]
     conn.close()
     return rows
 
 
-def batt_calcs(name: str, rows: DataRowContainer[DataRow]) -> tuple:
-    descriptions = rows.get('description')
-    contact = 0
-    total = 0
-    bb = 0
-    all_strike = 0
-    for d in descriptions:
-        if d.lower() == 'foul' or 'in play' in d.lower():
-            contact += 1
-            total += 1
-        if 'foul tip' in d.lower() or 'swinging' in d.lower():
-            total += 1
-        if 'play' in d.lower():
-            bb += 1
-        if 'strike' in d.lower():
-            all_strike += 1
-    hit_speeds = [float(x) for x in rows.get('hit_speed')]
-    hit_angles = [float(x) for x in rows.get('hit_angle')]
-    average_velocity = sum(hit_speeds) / len(hit_speeds) if hit_speeds else 0
-    max_ev = max(hit_speeds) if hit_speeds else 0
-    avg_launch_angle = sum(hit_angles) / len(hit_angles) if hit_angles else 0
-    if total == 0:
-        contact_percent = 0
-    else:
-        contact_percent = (contact / total) * 100
-    percentile_90 = np.percentile(hit_speeds, 90) if hit_speeds else 0
-
-    return (
-            name, len(rows), bb,
-            "{:.2f}".format(average_velocity),
-            "{:.2f}".format(max_ev),
-            "{:.2f}".format(avg_launch_angle),
-            "{:.2f}".format(contact_percent),
-            "{:.2f}".format(percentile_90)
-        )
-
-
-def basic_batt_calcs(data: DataRowContainer[DataRow]):
+def basic_batt_calcs(name: str, league: str, dates: tuple) -> dict:
     start_time = time.time()
-    name = data.get('batter_name')[0]
+    args = [dates[0], dates[1], name]
+    batt_query = '''
+        SELECT game_pk, ab_number, inning, px, pz, sz_top, sz_bot, description, des, events  
+        FROM all_plays
+        WHERE date BETWEEN ? AND ? AND batter_name = ?
+    '''
+    if league:
+        batt_query += ' AND league = ?'
+        args.append(league)
+    batt_query += ' ORDER BY game_pk, inning, ab_number'
+    conn, cursor = connect()
+    cursor.row_factory = dict_factory
+    cursor.execute(batt_query, args)
+    rows = cursor.fetchall()
+    print(len(rows))
+    conn.close()
+
     sac_b = 0
     sac_f = 0
     pa = 0
@@ -97,25 +76,31 @@ def basic_batt_calcs(data: DataRowContainer[DataRow]):
     strikeout = 0
     missed_swings = 0
     outside_pitches = 0
-    sz_top = sum(data.get('sz_top'))/len(data)
-    sz_bottom = sum(data.get('sz_bot'))/len(data)
-    for row in data:
+    contact = 0
+    hit_by_pitch = 0
+    current_ab = 0
+    hit_keywords = ['Single', 'Double', 'Triple', 'Home Run']
+    hits = 0
+    games = 0
+    current_game = None
+    for row in rows:
+        if current_game != row['game_pk']:
+            current_game = row['game_pk']
+            games += 1
+        if 'play' in row['description']:
+            contact += 1
         if row['px'] is not None:
-            if row['px'] < -17/2 or row['px'] > 17/2:
+            if row['px'] < -17/2 or row['px'] > 17/2 or row['pz'] < row['sz_bot'] or row['pz'] > row['sz_top']:
                 outside_pitches += 1
-            elif row['pz'] < sz_bottom or row['pz'] > sz_top:
-                outside_pitches += 1
-            else:
-                continue
-            if row['description'] in ['Swinging Strike', 'Foul', 'Foul Tip']:
-                missed_swings += 1
-
-    hits = len([x for x in data.get('description') if 'play' in x])
-    hit_by_pitch = len([x for x in data.get('description') if 'Hit By Pitch' == x])
-    for game_data in data.sort_by('game_pk').values():
-        for at_bat in game_data.sort_by('ab_number').values():
+                if row['description'] in ['Swinging Strike', 'Foul', 'Foul Tip']:
+                    missed_swings += 1
+        if row['ab_number'] != current_ab:
+            current_ab = row['ab_number']
             pa += 1
-            event = at_bat.get('events')[0]
+            event = row['events']
+            des = row['des']
+            if event in hit_keywords and 'error' not in des:
+                hits += 1
             if event in at_bat_events:
                 ab += 1
             if event == 'Single':
@@ -131,31 +116,37 @@ def basic_batt_calcs(data: DataRowContainer[DataRow]):
             elif event == 'Sac Bunt':
                 sac_b += 1
             if event != 'Field Error' and event != 'GIDP':
-                des = at_bat.get('des')[0]
                 rbi += des.count('scores')
-            if event == 'Walk' or event == 'Hit By Pitch' or event == 'Balk' or event == 'Intent Walk':
+            if event == 'Walk' or event == 'Intent Walk':
                 walks += 1
+            elif event == 'Hit By Pitch':
+                hit_by_pitch += 1
             if 'Strikeout' in event:
                 strikeout += 1
     rbi += hr
-    obp = (hits + walks + hit_by_pitch) / (pa - sac_b) * 100
-    slg = (singles + doubles*2 + triples*3 + hr*4) / pa
-    ba = (singles + doubles + triples + hr + sac_f + sac_b) / ab
+    obp = (hits + walks + hit_by_pitch) / (ab + hit_by_pitch + walks + sac_f)
+    slg = (singles + doubles*2 + triples*3 + hr*4) / ab
+    ba = hits / ab
     strikeout_percent = strikeout / pa * 100
     walk_percent = walks / pa * 100
     chase_percent = missed_swings / outside_pitches * 100
     conn, cursor = connect()
-    query = f'SELECT COUNT(*) FROM all_plays WHERE des LIKE "%{name} steals%" OR des LIKE "%{name}  steals%"'
-    cursor.execute(query)
-    steals = cursor.fetchone()
-    query = f'SELECT COUNT(*) FROM all_plays WHERE des LIKE "%{name} scores%" OR des LIKE "%{name}  scores%"'
-    cursor.execute(query)
-    runs = cursor.fetchone()
+    query = f'SELECT des FROM all_plays WHERE (des LIKE "%{name} steals%" OR des LIKE "%{name}  steals%") ' \
+            'AND date BETWEEN ? AND ? GROUP BY game_pk, ab_number'
+    cursor.execute(query, dates)
+    steals = cursor.fetchall()
+    query = query.replace('steals', 'scores')
+    cursor.execute(query, dates)
+    runs = cursor.fetchall()
+    runs = len(runs)
+    steals = len(steals)
     conn.close()
     print('basic_batt_calcs: ', time.time() - start_time)
-    return {'PA': pa, 'BA': '{:.4f}'.format(ba), 'OBP': '{:.2f}'.format(obp), 'SLG': '{:.2f}'.format(slg),
+    return {'PA': pa, 'AB': ab, 'BA': '{:.4f}'.format(ba), 'OBP': '{:.4f}'.format(obp), 'SLG': '{:.4f}'.format(slg),
             'HR': hr, 'R': runs, 'RBI': rbi, 'SB': steals, 'K%': '{:.2f}'.format(strikeout_percent),
-            'BB%': '{:.2f}'.format(walk_percent), 'Chase%': '{:.2f}'.format(chase_percent)}
+            'BB%': '{:.2f}'.format(walk_percent), 'Chase%': '{:.2f}'.format(chase_percent), 'singles': singles,
+            'doubles': doubles, 'triples': triples, 'H': hits, 'BB': walks, 'G': games,
+            'SO': strikeout}
 
 
 def build_calcs_query(leagues: list[str], total=False):
@@ -231,3 +222,7 @@ def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tup
     averages.update({row[0]: tuple(row) for row in batt_calcs_rows if row[0] is not None})
     ranges.update({row[0]: tuple(row) for row in batt_range_rows if row[0] is not None})
     return averages, ranges
+
+
+if __name__ == '__main__':
+    print(basic_batt_calcs('Freddie Freeman', 'MLB', ('2023-03-27', '2024-01-01')))

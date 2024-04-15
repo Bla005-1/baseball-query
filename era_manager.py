@@ -4,14 +4,16 @@ from utils import connect, nested_list, dict_factory
 
 
 def extract_scoring_batters(input_string):
-    pattern = r'\.\s*(.*?)\s+scores\b'
-
-    matches = re.findall(pattern, input_string)
+    score_pattern = r'\.\s*(.*?)\s+scores\b'
+    steal_pattern = r'\.\s*(.*?)\s+steals \(\d+\) home\.'
+    matches = re.findall(score_pattern, input_string)
+    matches.extend(re.findall(steal_pattern, input_string))
     matches = [match.strip() for match in matches]
     return matches
 
 
 def create_era_table():
+    print('Checking table')
     conn, cursor = connect()
     query = '''
         CREATE TABLE IF NOT EXISTS era_pointers (
@@ -26,9 +28,16 @@ def create_era_table():
         )
     '''
     cursor.execute(query)
+    index_queries = [
+        'CREATE INDEX IF NOT EXISTS idx_pitcher_name ON era_pointers (pitcher_name)',
+        'CREATE INDEX IF NOT EXISTS idx_date ON era_pointers (date)',
+        'CREATE INDEX IF NOT EXISTS idx_league ON era_pointers (league)',
+        'CREATE INDEX IF NOT EXISTS idx_batter_name ON era_pointers (batter_name)'
+    ]
+    for index_query in index_queries:
+        cursor.execute(index_query)
     conn.commit()
     conn.close()
-    print('Created ERA table')
 
 
 def find_era_plays(start_date: str, end_date: str):
@@ -44,8 +53,8 @@ def find_era_plays(start_date: str, end_date: str):
     cursor.row_factory = dict_factory
     cursor.execute(query, (start_date, end_date))
     rows = cursor.fetchall()
-    conn.close()
     print(len(rows))
+    conn.close()
     nested_rows = nested_list(rows)
     current_ab = None
     for game in nested_rows:
@@ -63,7 +72,7 @@ def find_era_plays(start_date: str, end_date: str):
                 current_ab = ab_number
 
                 batters = []
-                if 'scores' in des:
+                if 'scores' in des or ') home' in des:
                     batters = extract_scoring_batters(des)
                 for i, item in enumerate(on_base):
                     pitcher, batter, play_id = item
@@ -72,6 +81,7 @@ def find_era_plays(start_date: str, end_date: str):
                     if batter in batters:
                         era_plays.append((pitcher, batter, play_id, play['play_id'],
                                           play['date'], play['game_pk'], play['league']))
+                        on_base.pop(i)
                 if 'error' not in des.lower() and 'error' not in event.lower():
                     if 'reaches' in des or 'to 1st' in des:
                         on_base.append([pitcher_name, batter_name, play['play_id']])
@@ -102,4 +112,4 @@ def insert_era_plays(era_plays):
 
 
 if __name__ == '__main__':
-    insert_era_plays(find_era_plays('2024-02-01', '2024-04-14'))
+    insert_era_plays(find_era_plays('2023-01-01', '2024-04-14'))
