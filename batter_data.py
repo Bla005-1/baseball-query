@@ -25,7 +25,7 @@ def get_batter_data(name: str, league: str, dates: tuple) -> dict:
             OR description LIKE '%Swinging%' THEN 1 ELSE 0 END) * 100.0 AS contact_percent,
             GROUP_CONCAT(IFNULL(hit_speed, 'None'), ',') AS percentile_90
         FROM all_plays
-        WHERE date BETWEEN ? AND ?
+        WHERE date BETWEEN ? AND ? AND batter_name = ?
         AND pitch_name IS NOT NULL
     '''
     if league:

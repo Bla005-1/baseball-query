@@ -78,7 +78,7 @@ def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
             SUM(CASE WHEN LOWER(description) LIKE '%ball%' OR LOWER(description) LIKE '%hit by%' OR LOWER(description) 
              LIKE '%pitchout%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS ball_percentage
         FROM all_plays
-        WHERE date BETWEEN ? AND ? 
+        WHERE date BETWEEN ? AND ? AND pitcher_name = ?
         AND pitch_name IS NOT NULL
         '''
     if league:

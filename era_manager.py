@@ -112,4 +112,4 @@ def insert_era_plays(era_plays):
 
 
 if __name__ == '__main__':
-    insert_era_plays(find_era_plays('2023-01-01', '2024-04-14'))
+    insert_era_plays(find_era_plays('2023-01-01', '2024-04-16'))

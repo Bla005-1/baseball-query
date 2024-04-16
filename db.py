@@ -13,6 +13,7 @@ import traceback
 import logging
 from tqdm import tqdm
 from https import get_plays, get_pks_over_time, get_game_pks, date_iterator
+from era_manager import insert_era_plays, find_era_plays
 from queue import Queue
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
@@ -493,6 +494,11 @@ def daily_update(start_date=None, google=True):
     print(f'Using {start_date} as the beginning of new requests')
     the_pk_dict = get_pks_over_time(str(start_date))
     initialize_threads(the_pk_dict)
+    try:
+        insert_era_plays(find_era_plays(str(start_date), str(dt.date.today())))
+    except Exception:
+        log.error('An error occurred:', exc_info=True)
+        traceback.print_exc()
     if google:
         try:
             add_to_google()
