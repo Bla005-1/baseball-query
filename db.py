@@ -1,8 +1,6 @@
 import queue
 import sqlite3
 import threading
-import time
-
 import numpy as np
 import datetime as dt
 import pandas as pd
@@ -12,12 +10,12 @@ import sys
 import traceback
 import logging
 from tqdm import tqdm
-from https import get_plays, get_pks_over_time, get_game_pks, date_iterator
+from https import get_plays, get_pks_over_time
 from era_manager import insert_era_plays, find_era_plays
 from queue import Queue
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
-
+from utils import DebugManager, connect
 
 logging.basicConfig(
     filename='daily_update.log',
@@ -25,7 +23,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 log = logging.getLogger()
-
+debug = DebugManager()
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive']
 
@@ -58,10 +56,18 @@ db_keys = {'play_id': 'TEXT PRIMARY KEY', 'inning': 'INTEGER', 'ab_number': 'INT
            'runnerOn2B': 'INTEGER', 'runnerOn3B': 'INTEGER'}
 
 
-def connect():
-    conn = sqlite3.connect('baseball_plays.db')
-    cursor = conn.cursor()
-    return conn, cursor
+def create_all_plays_table():
+    columns = ', '.join([f"{column} {data_type}" for column, data_type in db_keys.items()])
+    table_query = f'CREATE TABLE IF NOT EXISTS all_plays ({columns})'
+    conn, cursor = connect()
+    cursor.execute(table_query)
+    indexes = ['batter_name', 'date', 'league', 'pitch_name', 'pitcher_name',
+               'team_fielding', 'game_pk', 'inning', 'ab_number']
+    index_query = 'CREATE INDEX IF NOT EXISTS idx_blank ON all_plays (blank);'
+    for idx in indexes:
+        cursor.execute(index_query.replace('blank', idx))
+    conn.commit()
+    conn.close()
 
 
 def process_batter_rows(rows: list) -> list[dict]:
@@ -75,21 +81,35 @@ def process_batter_rows(rows: list) -> list[dict]:
         if play_data[-1] == '':
             play_data.pop()
 
-        interval = 4
+        interval = 5
         play_data = [None if value == 'None' else value for value in play_data]
         hit_speeds = [float(play_data[x]) for x in range(0, len(play_data), interval) if play_data[x] is not None]
         hit_angles = [float(play_data[x]) for x in range(1, len(play_data), interval) if play_data[x] is not None]
         descriptions = [play_data[x] for x in range(2, len(play_data), interval)]
+        zones = [int(play_data[x]) or 0 for x in range(4, len(play_data), interval)]
         contact = 0
         total = 0
         bb = 0
+        in_zone_c = 0
+        chase = 0
+        in_zone = 0
+        out_zone = 0
         all_strike = 0
-        for d in descriptions:
+        for i, d in enumerate(descriptions):
+            if zones[i] > 9:
+                out_zone += 1
             if d.lower() == 'foul' or 'in play' in d.lower():
                 contact += 1
                 total += 1
+                if 0 < zones[i] < 9:
+                    in_zone_c += 1
+                    in_zone += 1
             if 'foul tip' in d.lower() or 'swinging' in d.lower():
                 total += 1
+                if 0 < zones[i] < 9:
+                    in_zone += 1
+                elif zones[i] > 9:
+                    chase += 1
             if 'play' in d.lower():
                 bb += 1
             if 'strike' in d.lower():
@@ -102,7 +122,8 @@ def process_batter_rows(rows: list) -> list[dict]:
         else:
             contact_percent = (contact / total) * 100
         percentile_90 = np.percentile(hit_speeds, 90) if hit_speeds else 0
-
+        zone_contact = in_zone_c / in_zone if in_zone else 0
+        chase_percent = chase / out_zone if out_zone else 0
         batter_data.append(
             {
                 'league': league,
@@ -112,7 +133,9 @@ def process_batter_rows(rows: list) -> list[dict]:
                 'avg_launch_angle': "{:.2f}".format(avg_launch_angle),
                 'bb': bb,
                 'contact_percent': "{:.2f}".format(contact_percent),
-                'percentile_90': "{:.2f}".format(percentile_90)
+                'percentile_90': "{:.2f}".format(percentile_90),
+                'zone_contact': "{:.2f}".format(zone_contact),
+                'chase': "{:.2f}".format(chase_percent)
             })
     return batter_data
 
@@ -281,7 +304,7 @@ def get_initial_data(dates: tuple, batt_query: str = None, pitch_query: str = No
             SELECT league, batter_name,
                 GROUP_CONCAT(IFNULL(CAST(hit_speed AS REAL), 'None') || ',' || IFNULL(CAST(hit_angle AS REAL), 'None') 
                 || ',' || IFNULL(REPLACE(description, ',', '-'), 'None') || ',' ||
-                IFNULL(REPLACE(des, ',', '-'), 'None')) AS play_data
+                IFNULL(REPLACE(des, ',', '-'), 'None') || ',' || IFNULL(CAST(zone AS INTEGER), 0)) AS play_data
             FROM all_plays
             WHERE des NOT LIKE '%bunt%' AND date BETWEEN ? AND ?
             GROUP BY league, batter_name;
@@ -309,14 +332,9 @@ def get_initial_data(dates: tuple, batt_query: str = None, pitch_query: str = No
     return batter_data, pitcher_data
 
 
-def retrieve_data(pk_dict, output_queue: queue.Queue):
-    for plays in get_plays(pk_dict, output_queue):
+def retrieve_data(pk_dict):
+    for plays in get_plays(pk_dict, debug):
         data_queue.put(plays)
-
-
-counted_games = 0
-overwritten_plays = 0
-total_plays = 0
 
 
 def insert_batch_data(batch: list[list[dict]]):
@@ -324,12 +342,11 @@ def insert_batch_data(batch: list[list[dict]]):
     columns = [str(x) for x in db_keys.keys()]
     q_values = ['?' for x in columns]
     query = f'INSERT INTO all_plays ({", ".join(columns)}) VALUES ({", ".join(q_values)})'
-    global counted_games, total_plays, overwritten_plays
     for b in batch:
-        counted_games += 1
+        debug.increment('DB', 'counted_games')
         conn.execute('BEGIN TRANSACTION')
         for item in b:
-            total_plays += 1
+            debug.increment('DB', 'total_plays')
             for key, value in item.items():
                 if isinstance(value, str) and ',' in value:
                     item[key] = value.replace(',', ';')
@@ -347,9 +364,9 @@ def insert_batch_data(batch: list[list[dict]]):
                     sorted_item[column] = item.get(column, None)
             try:
                 cursor.execute(query, tuple(sorted_item.values()))
-
+                debug.increment('DB', 'inserted_plays')
             except sqlite3.IntegrityError:
-                overwritten_plays += 1
+                debug.increment('DB', 'overwritten_plays')
         conn.commit()
     conn.close()
 
@@ -369,54 +386,21 @@ def insert_queue_data(total):
             if data == 'failed':
                 data_queue.task_done()
                 continue
+
             batch.append(data)
             data_queue.task_done()
 
         insert_batch_data(batch)
-
     progress_bar.close()
-
-
-def check_db(start_date, end_date):
-    pk_dict = get_pks_over_time(start_date, end_date)
-    all_pks = []
-    for pk_list in pk_dict.values():
-        all_pks.extend(pk_list)
-
-    conn, cursor = connect()
-
-    query = 'SELECT DISTINCT game_pk FROM all_plays WHERE date BETWEEN ? AND ?'
-    cursor.execute(query, (start_date, end_date))
-    rows = cursor.fetchall()
-    rows = [int(x[0]) for x in rows]
-    missing = []
-    found = []
-    duplicate = []
-    print(all_pks)
-    print(rows)
-    for pk in all_pks:
-        if pk not in rows:
-            missing.append(pk)
-        else:
-            if pk in found:
-                duplicate.append(pk)
-            found.append(pk)
-    print(missing)
-    print(duplicate)
-    print('Duplicate: ', len(duplicate))
-    print('Total got: ', len(all_pks))
-    print('Missing: ', len(missing))
 
 
 def initialize_threads(pk_dict: dict[str: list[int]]):
     total = sum(len(lst) for lst in pk_dict.values())
     retrieve_threads = []
-    output_queue = queue.Queue()
     for d, v in pk_dict.items():
         mid = len(v) // 2
-        thread1 = threading.Thread(target=retrieve_data, args=({d: v[:mid]}, output_queue))
-        thread2 = threading.Thread(target=retrieve_data, args=({d: v[mid:]}, output_queue))
-        print(f'created thread for {d}')
+        thread1 = threading.Thread(target=retrieve_data, args=({d: v[:mid]},))
+        thread2 = threading.Thread(target=retrieve_data, args=({d: v[mid:]},))
         thread1.start()
         retrieve_threads.append(thread1)
         thread2.start()
@@ -427,17 +411,8 @@ def initialize_threads(pk_dict: dict[str: list[int]]):
 
     for thread in retrieve_threads:
         thread.join()
-
-    print(' ')
-    while not output_queue.empty():
-        print(output_queue.get())
-
-    data_queue.join()
     insert_thread.join()
-    print('Counted games: ', counted_games)
-    print('Total plays: ', total_plays)
-    print('Overwritten plays: ', overwritten_plays)
-    print('All threads finished')
+    print(' ')
 
 
 def write_to_sheet(df, key: str, sheet: str = 'Sheet1'):
@@ -492,13 +467,14 @@ def daily_update(start_date=None, google=True):
 
     log.info(f'Using {start_date} as the beginning of new requests')
     print(f'Using {start_date} as the beginning of new requests')
-    the_pk_dict = get_pks_over_time(str(start_date))
+    the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)
     initialize_threads(the_pk_dict)
     try:
         insert_era_plays(find_era_plays(str(start_date), str(dt.date.today())))
     except Exception:
         log.error('An error occurred:', exc_info=True)
         traceback.print_exc()
+    print(debug)
     if google:
         try:
             add_to_google()
@@ -515,7 +491,6 @@ def daily_update(start_date=None, google=True):
 
 # date format is 2023-08-04
 if __name__ == '__main__':
-    # check_db('2023-01-01', '2024-02-24')
     try:
         os.chdir(os.path.dirname(__file__))
         if len(sys.argv) == 2:

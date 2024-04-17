@@ -2,5 +2,6 @@
 __pycache__
 *.html
 *.db
+*.log
 last_update.txt
 baseball_env

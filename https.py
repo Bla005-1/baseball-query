@@ -58,7 +58,7 @@ def https_request(url, end=False):
 
 
 # our standard for date format 2023-06-18
-def get_pks_over_time(start_date, end_date=None, league=None) -> dict[str, list[int]]:
+def get_pks_over_time(start_date, end_date=None, league=None, debugger=None) -> dict[str, list[int]]:
 
     game_pks = {
         'MLB': [],
@@ -77,7 +77,7 @@ def get_pks_over_time(start_date, end_date=None, league=None) -> dict[str, list[
         time.sleep(.2)
     for thread in threads:
         thread.join()
-    print(f'About to fetch {sum(len(lst) for lst in game_pks.values())} games')
+    debugger.increment('Fetch', 'games_to_fetch', sum(len(lst) for lst in game_pks.values()))
     return game_pks
 
 
@@ -124,33 +124,30 @@ def format_game_data(data: dict, league: str) -> list[dict]:
     return plays
 
 
-def get_plays(pk_dict: dict[str, list[int]], output_queue) -> typing.Generator[list[dict], None, None]:
+def get_plays(pk_dict: dict[str, list[int]], debugger) -> typing.Generator[list[dict], None, None]:
     keys = pk_dict.keys()
-    success = 0
-    failed = 0
     for league in keys:
         for pk in pk_dict[league]:
             try:
                 d = get_game_data(pk)
                 if d is None:
-                    failed += 1
+                    debugger.increment('Fetch', 'games_failed')
                     yield 'failed'
                     continue
                 if d.get('team_home') is None or d.get('team_away') is None:
-                    failed += 1
+                    debugger.increment('Fetch', 'games_failed')
                     yield 'failed'
                     continue
                 plays = format_game_data(d, league)
                 if plays:
-                    success += 1
+                    debugger.increment('Fetch', 'games_succeeded')
                     yield plays
                 else:
                     print('uh oh, look at https.get_plays')
 
             except Exception as e:
-                failed += 1
+                debugger.increment('Fetch', 'games_failed')
                 print(' There was a ERROR, but that is ok :)')
                 traceback.print_tb(e.__traceback__)
                 yield 'failed'
 
-    output_queue.put(f'retrieved {success} {list(keys)[0]} games. {failed} failed')

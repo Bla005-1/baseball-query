@@ -83,3 +83,20 @@ def get_matching_search(name: str, league: str, team: str, dates: tuple, player_
         result.append(tup)
 
     return result
+
+
+class DebugManager:
+    def __init__(self):
+        self.metrics = {}
+
+    def increment(self, category, metric, value=1):
+        self.metrics.setdefault(category, {}).setdefault(metric, 0)
+        self.metrics[category][metric] += value
+
+    def __str__(self):
+        output = ""
+        for category, metrics in self.metrics.items():
+            output += f"{category}:\n"
+            for metric, value in metrics.items():
+                output += f"    {metric.replace('_', ' ').capitalize()}: {value}\n"
+        return output
