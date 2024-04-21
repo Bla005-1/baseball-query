@@ -3,7 +3,7 @@ import re
 from utils import connect, nested_list, dict_factory
 
 
-def extract_scoring_batters(input_string):
+def extract_scoring_batters(input_string: str) -> list[str]:
     score_pattern = r'\.\s*(.*?)\s+scores\b'
     steal_pattern = r'\.\s*(.*?)\s+steals \(\d+\) home\.'
     matches = re.findall(score_pattern, input_string)
@@ -40,7 +40,7 @@ def create_era_table():
     conn.close()
 
 
-def find_era_plays(start_date: str, end_date: str):
+def find_era_plays(start_date: str, end_date: str) -> list[tuple[str]]:
     era_plays = []
     in_play = ['Single', 'Double', 'Triple']
     conn, cursor = connect()
@@ -94,12 +94,12 @@ def find_era_plays(start_date: str, end_date: str):
     return era_plays
 
 
-def insert_era_plays(era_plays):
+def insert_era_plays(era_plays: list[tuple[str]]):
     create_era_table()
     conn, cursor = connect()
-    query = 'INSERT INTO era_pointers ' \
-            '(pitcher_name, batter_name, play_id_hit, play_id_scored, date, game_pk, league) ' \
-            'VALUES (?, ?, ?, ?, ?, ?, ?)'
+    query = '''INSERT INTO era_pointers
+            (pitcher_name, batter_name, play_id_hit, play_id_scored, date, game_pk, league)
+            VALUES (?, ?, ?, ?, ?, ?, ?)'''
     conn.execute('BEGIN TRANSACTION')
     for play in era_plays:
         try:

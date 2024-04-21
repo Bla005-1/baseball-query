@@ -87,7 +87,7 @@ def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
 
     total_query = pitch_query.replace('pitch_name,', '"Total" AS pitch_name,')
     pitch_query += 'GROUP BY pitch_name'
-
+    args.extend(args)
     conn, cursor = connect()
     cursor.row_factory = dict_factory
     cursor.execute(pitch_query + '\nUNION ALL\n' + total_query, args)

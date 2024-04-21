@@ -5,7 +5,7 @@ info:
 paths:
   /pitcher:
     get:
-      operationId: "api_app.get_pitcher"
+      operationId: "main_api.get_pitcher"
       responses:
         200:
           description: "Get stats for a pitcher"
@@ -34,7 +34,7 @@ paths:
           description: "League"
   /batter:
     get:
-      operationId: "api_app.get_batter"
+      operationId: "main_api.get_batter"
       responses:
         200:
           description: "Get stats for a batter"

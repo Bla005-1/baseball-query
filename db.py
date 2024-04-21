@@ -27,7 +27,7 @@ debug = DebugManager()
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive']
 
-data_queue = Queue()
+data_queue = Queue(maxsize=100)
 
 db_keys = {'play_id': 'TEXT PRIMARY KEY', 'inning': 'INTEGER', 'ab_number': 'INTEGER', 'cap_index': 'INTEGER',
            'outs': 'INTEGER', 'batter': 'INTEGER', 'stand': 'TEXT', 'batter_name': 'TEXT', 'pitcher': 'INTEGER',
@@ -332,7 +332,7 @@ def get_initial_data(dates: tuple, batt_query: str = None, pitch_query: str = No
     return batter_data, pitcher_data
 
 
-def retrieve_data(pk_dict):
+def retrieve_data(pk_dict: dict):
     for plays in get_plays(pk_dict, debug):
         data_queue.put(plays)
 
@@ -371,7 +371,7 @@ def insert_batch_data(batch: list[list[dict]]):
     conn.close()
 
 
-def insert_queue_data(total):
+def insert_queue_data(total: int):
     progress_bar = tqdm(total=total, unit='iteration')
     count = 0
     while count < total:
@@ -415,7 +415,7 @@ def initialize_threads(pk_dict: dict[str: list[int]]):
     print(' ')
 
 
-def write_to_sheet(df, key: str, sheet: str = 'Sheet1'):
+def write_to_sheet(df: pd.DataFrame, key: str, sheet: str = 'Sheet1'):
     credentials = Credentials.from_service_account_file('baseball-stats-394502-c0dd81e75f98.json', scopes=SCOPES)
 
     gc = gspread.authorize(credentials)

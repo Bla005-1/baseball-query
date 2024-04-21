@@ -34,7 +34,7 @@ def get_batter_data(name: str, league: str, dates: tuple) -> dict:
 
     total_query = batt_query.replace('pitch_name,', '"Total" AS pitch_name,')
     batt_query += 'GROUP BY pitch_name'
-
+    args.extend(args)
     conn, cursor = connect()
     cursor.row_factory = dict_factory
     cursor.execute(batt_query + '\nUNION ALL\n' + total_query, args)
@@ -188,12 +188,21 @@ def build_range_query(leagues: list[str], total=False):
 
 
 def add_percentile(row):
-    row = list(row)
-    if row[-1] is not None:
-        hit_speeds = row[-1].split(',')
+    if isinstance(row, dict):
+        item = row['percentile_90']
+    else:
+        row = list(row)
+        item = row[-1]
+    item: str
+    if item is not None:
+        hit_speeds = item.split(',')
         hit_speeds = [float(x) for x in hit_speeds if x != 'None']
-        row[-1] = np.percentile(hit_speeds, 90) if hit_speeds else 0
-    return row
+        if isinstance(row, dict):
+            row['percentile_90'] = np.percentile(hit_speeds, 90) if hit_speeds else 0
+            return row
+        else:
+            row[-1] = np.percentile(hit_speeds, 90) if hit_speeds else 0
+            return row
 
 
 def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tuple], dict[str: tuple]]:

@@ -91,7 +91,7 @@ def get_game_pks(game_pks: dict, date=None, league: list = None):
         game_pks[x].extend(extract_game_pk(data))
 
 
-def extract_game_pk(data) -> list[int]:
+def extract_game_pk(data: dict) -> list[int]:
     dates = data['dates']
     game_pks = []
     for x in dates:
