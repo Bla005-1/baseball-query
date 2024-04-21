@@ -1,7 +1,8 @@
 import sqlite3
+from typing import List, Iterable, Any
 
 
-def nested_list(rows: list[dict]):
+def nested_list(rows: List[dict]):
     nested_lists = []
     current_game = None
     current_inning = None
@@ -39,7 +40,22 @@ def connect():
     return conn, cursor
 
 
-def get_matching_search(name: str, league: str, team: str, dates: tuple, player_type: str) -> list[sqlite3.Row]:
+def select_data(query: str, args: Iterable = None, row_factory=dict_factory) -> List[Any]:
+    conn, cursor = connect()
+    try:
+        if row_factory is not None:
+            cursor.row_factory = row_factory
+        if args is not None:
+            cursor.execute(query, args)
+        else:
+            cursor.execute(query)
+        data = cursor.fetchall()
+        return data
+    finally:
+        conn.close()
+
+
+def get_matching_search(name: str, league: str, team: str, dates: tuple, player_type: str) -> List[sqlite3.Row]:
     conditions = [dates[0], dates[1]]
     if player_type == 'pitcher':
         query = f'SELECT DISTINCT pitcher_name, league, team_fielding FROM all_plays WHERE date BETWEEN ? AND ?'
@@ -89,7 +105,7 @@ class DebugManager:
     def __init__(self):
         self.metrics = {}
 
-    def increment(self, category, metric, value=1):
+    def increment(self, category: str, metric: str, value: int = 1):
         self.metrics.setdefault(category, {}).setdefault(metric, 0)
         self.metrics[category][metric] += value
 

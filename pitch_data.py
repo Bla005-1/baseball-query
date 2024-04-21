@@ -1,5 +1,5 @@
 import math
-from utils import connect, dict_factory
+from utils import connect, select_data
 
 pitch_names = [
     'Sinker', 'Slider', 'Changeup', 'Curveball', 'Cutter', '4-Seam Fastball',
@@ -21,13 +21,8 @@ def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
         query2 += ' AND league = ?'
         args.append(league)
     query2 += ' GROUP BY game_pk, ab_number ORDER BY game_pk, ab_number'
-    conn, cursor = connect()
-    cursor.execute(query1, args)
-    er_plays = cursor.fetchall()
-    cursor.row_factory = dict_factory
-    cursor.execute(query2, args)
-    rows = cursor.fetchall()
-    conn.close()
+    er_plays = select_data(query1, args, None)
+    rows = select_data(query2, args)
     current_inning = None
     current_game = None
     current_out = 0
@@ -88,11 +83,7 @@ def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
     total_query = pitch_query.replace('pitch_name,', '"Total" AS pitch_name,')
     pitch_query += 'GROUP BY pitch_name'
     args.extend(args)
-    conn, cursor = connect()
-    cursor.row_factory = dict_factory
-    cursor.execute(pitch_query + '\nUNION ALL\n' + total_query, args)
-    rows = cursor.fetchall()
-    conn.close()
+    rows = select_data(pitch_query + '\nUNION ALL\n' + total_query, args)
     return rows
 
 

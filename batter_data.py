@@ -1,6 +1,6 @@
 import time
-import numpy as np
-from utils import connect, dict_factory
+from utils import connect, select_data
+from common_data import add_percentile
 
 at_bat_events = [
     'Double', 'Strikeout', 'Flyout', 'Single', 'Forceout', 'Pop Out', 'Groundout',
@@ -35,12 +35,8 @@ def get_batter_data(name: str, league: str, dates: tuple) -> dict:
     total_query = batt_query.replace('pitch_name,', '"Total" AS pitch_name,')
     batt_query += 'GROUP BY pitch_name'
     args.extend(args)
-    conn, cursor = connect()
-    cursor.row_factory = dict_factory
-    cursor.execute(batt_query + '\nUNION ALL\n' + total_query, args)
-    rows = cursor.fetchall()
+    rows = select_data(batt_query + '\nUNION ALL\n' + total_query, args)
     rows = [add_percentile(x) for x in rows]
-    conn.close()
     return rows
 
 
@@ -56,13 +52,7 @@ def basic_batt_calcs(name: str, league: str, dates: tuple) -> dict:
         batt_query += ' AND league = ?'
         args.append(league)
     batt_query += ' ORDER BY game_pk, inning, ab_number'
-    conn, cursor = connect()
-    cursor.row_factory = dict_factory
-    cursor.execute(batt_query, args)
-    rows = cursor.fetchall()
-    print(len(rows))
-    conn.close()
-
+    rows = select_data(batt_query, args)
     sac_b = 0
     sac_f = 0
     pa = 0
@@ -187,22 +177,7 @@ def build_range_query(leagues: list[str], total=False):
     '''
 
 
-def add_percentile(row):
-    if isinstance(row, dict):
-        item = row['percentile_90']
-    else:
-        row = list(row)
-        item = row[-1]
-    item: str
-    if item is not None:
-        hit_speeds = item.split(',')
-        hit_speeds = [float(x) for x in hit_speeds if x != 'None']
-        if isinstance(row, dict):
-            row['percentile_90'] = np.percentile(hit_speeds, 90) if hit_speeds else 0
-            return row
-        else:
-            row[-1] = np.percentile(hit_speeds, 90) if hit_speeds else 0
-            return row
+
 
 
 def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tuple], dict[str: tuple]]:

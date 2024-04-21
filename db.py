@@ -1,7 +1,6 @@
 import queue
 import sqlite3
 import threading
-import numpy as np
 import datetime as dt
 import pandas as pd
 import gspread
@@ -15,7 +14,8 @@ from era_manager import insert_era_plays, find_era_plays
 from queue import Queue
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
-from utils import DebugManager, connect
+from utils import DebugManager, connect, select_data
+from common_data import add_percentile, calculate_contacts
 
 logging.basicConfig(
     filename='daily_update.log',
@@ -70,74 +70,42 @@ def create_all_plays_table():
     conn.close()
 
 
-def process_batter_rows(rows: list) -> list[dict]:
-    batter_data = []
-    for row in rows:
-        league = row[0]
-        name = row[1]
-        play_data = row[2].split(',')
-
-        # remove trailing empty string caused by GROUP_CONCAT
-        if play_data[-1] == '':
-            play_data.pop()
-
-        interval = 5
-        play_data = [None if value == 'None' else value for value in play_data]
-        hit_speeds = [float(play_data[x]) for x in range(0, len(play_data), interval) if play_data[x] is not None]
-        hit_angles = [float(play_data[x]) for x in range(1, len(play_data), interval) if play_data[x] is not None]
-        descriptions = [play_data[x] for x in range(2, len(play_data), interval)]
-        zones = [int(play_data[x]) or 0 for x in range(4, len(play_data), interval)]
-        contact = 0
-        total = 0
-        bb = 0
-        in_zone_c = 0
-        chase = 0
-        in_zone = 0
-        out_zone = 0
-        all_strike = 0
-        for i, d in enumerate(descriptions):
-            if zones[i] > 9:
-                out_zone += 1
-            if d.lower() == 'foul' or 'in play' in d.lower():
-                contact += 1
-                total += 1
-                if 0 < zones[i] < 9:
-                    in_zone_c += 1
-                    in_zone += 1
-            if 'foul tip' in d.lower() or 'swinging' in d.lower():
-                total += 1
-                if 0 < zones[i] < 9:
-                    in_zone += 1
-                elif zones[i] > 9:
-                    chase += 1
-            if 'play' in d.lower():
-                bb += 1
-            if 'strike' in d.lower():
-                all_strike += 1
-        average_velocity = sum(hit_speeds) / len(hit_speeds) if hit_speeds else 0
-        max_ev = max(hit_speeds) if hit_speeds else 0
-        avg_launch_angle = sum(hit_angles) / len(hit_angles) if hit_angles else 0
-        if total == 0:
-            contact_percent = 0
-        else:
-            contact_percent = (contact / total) * 100
-        percentile_90 = np.percentile(hit_speeds, 90) if hit_speeds else 0
-        zone_contact = in_zone_c / in_zone if in_zone else 0
-        chase_percent = chase / out_zone if out_zone else 0
-        batter_data.append(
+def process_batter_rows():
+    query = '''
+        SELECT 
+            batter_name,
+            league,
+            GROUP_CONCAT(zone) as zones,
+            GROUP_CONCAT(description) as descriptions,
+            GROUP_CONCAT(hit_speed) as percentile_90,
+            AVG(CAST(hit_speed AS REAL)) AS ev,
+            MAX(CAST(hit_speed AS REAL)) AS max_ev,
+            AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle
+        FROM all_plays
+        GROUP BY league, batter_name
+    '''
+    batter_data = select_data(query)
+    processed_data = []
+    for batter_row in batter_data:
+        batter_row = add_percentile(batter_row)
+        descriptions = batter_row.get('descriptions', '').split(',')
+        zones = batter_row.get('zones', '').split(',')
+        hit_speeds = batter_row.get('percentile_90', '').split(',')  # don't let the dict key name confuse you
+        contact_percent, zone_contact, chase_percent = calculate_contacts(descriptions, zones)
+        processed_data.append(
             {
-                'league': league,
-                'name': name,
-                'exit_velocity': "{:.2f}".format(average_velocity),
-                'max_ev': "{:.2f}".format(max_ev),
-                'avg_launch_angle': "{:.2f}".format(avg_launch_angle),
-                'bb': bb,
-                'contact_percent': "{:.2f}".format(contact_percent),
-                'percentile_90': "{:.2f}".format(percentile_90),
-                'zone_contact': "{:.2f}".format(zone_contact),
-                'chase': "{:.2f}".format(chase_percent)
+                'league': batter_row['league'],
+                'name': batter_row['batter_name'],
+                'exit_velocity': '{:.2f}'.format(batter_row['ev']),
+                'max_ev': '{:.2f}'.format(batter_row['max_ev']),
+                'avg_launch_angle': '{:.2f}'.format(batter_row['avg_hit_angle']),
+                'bb': len([x for x in hit_speeds if x is not None]),
+                'contact_percent': '{:.2f}'.format(contact_percent),
+                'percentile_90': '{:.2f}'.format(batter_row['percentile_90']),
+                'zone_contact': '{:.2f}'.format(zone_contact),
+                'chase': '{:.2f}'.format(chase_percent)
             })
-    return batter_data
+    return processed_data
 
 
 def process_pitch_rows(pitch_rows: list) -> list[dict]:
@@ -297,18 +265,8 @@ def process_pitch_rows(pitch_rows: list) -> list[dict]:
 
 
 # p.hit_speed IS NOT NULL AND
-def get_initial_data(dates: tuple, batt_query: str = None, pitch_query: str = None) -> tuple[list, list]:
+def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]:
     conn, cursor = connect()
-    if batt_query is None:
-        batt_query = '''
-            SELECT league, batter_name,
-                GROUP_CONCAT(IFNULL(CAST(hit_speed AS REAL), 'None') || ',' || IFNULL(CAST(hit_angle AS REAL), 'None') 
-                || ',' || IFNULL(REPLACE(description, ',', '-'), 'None') || ',' ||
-                IFNULL(REPLACE(des, ',', '-'), 'None') || ',' || IFNULL(CAST(zone AS INTEGER), 0)) AS play_data
-            FROM all_plays
-            WHERE des NOT LIKE '%bunt%' AND date BETWEEN ? AND ?
-            GROUP BY league, batter_name;
-        '''
     if pitch_query is None:
         pitch_query = '''
                 SELECT league, pitcher_name,
@@ -322,11 +280,9 @@ def get_initial_data(dates: tuple, batt_query: str = None, pitch_query: str = No
                 WHERE des NOT LIKE '%bunt%' AND date BETWEEN ? AND ?
                 GROUP BY league, pitcher_name;
             '''
-    cursor.execute(batt_query, dates)
-    batt_rows = cursor.fetchall()
     cursor.execute(pitch_query, dates)
     pitch_rows = cursor.fetchall()
-    batter_data = process_batter_rows(batt_rows)
+    batter_data = process_batter_rows()
     pitcher_data = process_pitch_rows(pitch_rows)
     conn.close()
     return batter_data, pitcher_data

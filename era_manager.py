@@ -1,6 +1,6 @@
 import sqlite3
 import re
-from utils import connect, nested_list, dict_factory
+from utils import connect, nested_list, select_data
 
 
 def extract_scoring_batters(input_string: str) -> list[str]:
@@ -43,18 +43,14 @@ def create_era_table():
 def find_era_plays(start_date: str, end_date: str) -> list[tuple[str]]:
     era_plays = []
     in_play = ['Single', 'Double', 'Triple']
-    conn, cursor = connect()
     query = '''
             SELECT pitcher_name, batter_name, events, des, date, game_pk, league, play_id, inning, ab_number
             FROM all_plays
             WHERE date BETWEEN ? AND ?
             ORDER BY game_pk, ab_number
         '''
-    cursor.row_factory = dict_factory
-    cursor.execute(query, (start_date, end_date))
-    rows = cursor.fetchall()
+    rows = select_data(query, (start_date, end_date))
     print(len(rows))
-    conn.close()
     nested_rows = nested_list(rows)
     current_ab = None
     for game in nested_rows:
