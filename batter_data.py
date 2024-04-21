@@ -1,6 +1,6 @@
 import time
 from utils import connect, select_data
-from common_data import add_percentile
+from common_data import add_percentile, calculate_contacts
 
 at_bat_events = [
     'Double', 'Strikeout', 'Flyout', 'Single', 'Forceout', 'Pop Out', 'Groundout',
@@ -14,16 +14,16 @@ def get_batter_data(name: str, league: str, dates: tuple) -> dict:
     args = [dates[0], dates[1], name]
     batt_query = '''
         SELECT
+            batter_name,
+            league,
             pitch_name,
             COUNT(*) AS seen,
-            SUM(CASE WHEN LOWER(description) LIKE '%foul%' OR LOWER(description) LIKE '%play%' THEN 1 ELSE 0 END) AS bb,
             AVG(CAST(hit_speed AS REAL)) AS avg_velo,
             MAX(CAST(hit_speed AS REAL)) AS max_velo,
             AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle,
-            CAST(SUM(CASE WHEN description LIKE '%In play%' OR description = 'Foul'
-            THEN 1 ELSE 0 END) AS REAL) / SUM(CASE WHEN description LIKE '%In play%' OR description LIKE '%Foul%' 
-            OR description LIKE '%Swinging%' THEN 1 ELSE 0 END) * 100.0 AS contact_percent,
-            GROUP_CONCAT(IFNULL(hit_speed, 'None'), ',') AS percentile_90
+            GROUP_CONCAT(zone) as zones,
+            GROUP_CONCAT(description) as descriptions,
+            GROUP_CONCAT(hit_speed) as percentile_90
         FROM all_plays
         WHERE date BETWEEN ? AND ? AND batter_name = ?
         AND pitch_name IS NOT NULL
@@ -36,8 +36,29 @@ def get_batter_data(name: str, league: str, dates: tuple) -> dict:
     batt_query += 'GROUP BY pitch_name'
     args.extend(args)
     rows = select_data(batt_query + '\nUNION ALL\n' + total_query, args)
-    rows = [add_percentile(x) for x in rows]
-    return rows
+    processed_rows = process_batter_rows(rows)
+    return processed_rows
+
+
+def process_batter_rows(batter_data: list[dict]):
+    processed_data = []
+    for batter_row in batter_data:
+        hit_speeds = batter_row.get('percentile_90', '')
+        if hit_speeds is None:
+            hit_speeds = ''
+        hit_speeds = hit_speeds.split(',')  # don't let the dict key name confuse you
+        batter_row = add_percentile(batter_row)
+        descriptions = batter_row.get('descriptions', '').split(',')
+        zones = batter_row.get('zones', '').split(',')
+        contact_percent, zone_contact, chase_percent = calculate_contacts(descriptions, zones)
+        batter_row['bb'] = len([x for x in hit_speeds if x is not None])
+        batter_row['contact_percent'] = contact_percent
+        batter_row['zone_contact'] = zone_contact
+        batter_row['chase'] = chase_percent
+        batter_row.pop('zones')
+        batter_row.pop('descriptions')
+        processed_data.append(batter_row)
+    return processed_data
 
 
 def basic_batt_calcs(name: str, league: str, dates: tuple) -> dict:
@@ -209,4 +230,4 @@ def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tup
 
 
 if __name__ == '__main__':
-    print(basic_batt_calcs('Freddie Freeman', 'MLB', ('2023-03-27', '2024-01-01')))
+    print(get_batter_data('Freddie Freeman', 'MLB', ('2023-03-27', '2024-01-01')))

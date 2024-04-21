@@ -15,7 +15,7 @@ from queue import Queue
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 from utils import DebugManager, connect, select_data
-from common_data import add_percentile, calculate_contacts
+from batter_data import process_batter_rows
 
 logging.basicConfig(
     filename='daily_update.log',
@@ -68,44 +68,6 @@ def create_all_plays_table():
         cursor.execute(index_query.replace('blank', idx))
     conn.commit()
     conn.close()
-
-
-def process_batter_rows():
-    query = '''
-        SELECT 
-            batter_name,
-            league,
-            GROUP_CONCAT(zone) as zones,
-            GROUP_CONCAT(description) as descriptions,
-            GROUP_CONCAT(hit_speed) as percentile_90,
-            AVG(CAST(hit_speed AS REAL)) AS ev,
-            MAX(CAST(hit_speed AS REAL)) AS max_ev,
-            AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle
-        FROM all_plays
-        GROUP BY league, batter_name
-    '''
-    batter_data = select_data(query)
-    processed_data = []
-    for batter_row in batter_data:
-        batter_row = add_percentile(batter_row)
-        descriptions = batter_row.get('descriptions', '').split(',')
-        zones = batter_row.get('zones', '').split(',')
-        hit_speeds = batter_row.get('percentile_90', '').split(',')  # don't let the dict key name confuse you
-        contact_percent, zone_contact, chase_percent = calculate_contacts(descriptions, zones)
-        processed_data.append(
-            {
-                'league': batter_row['league'],
-                'name': batter_row['batter_name'],
-                'exit_velocity': '{:.2f}'.format(batter_row['ev']),
-                'max_ev': '{:.2f}'.format(batter_row['max_ev']),
-                'avg_launch_angle': '{:.2f}'.format(batter_row['avg_hit_angle']),
-                'bb': len([x for x in hit_speeds if x is not None]),
-                'contact_percent': '{:.2f}'.format(contact_percent),
-                'percentile_90': '{:.2f}'.format(batter_row['percentile_90']),
-                'zone_contact': '{:.2f}'.format(zone_contact),
-                'chase': '{:.2f}'.format(chase_percent)
-            })
-    return processed_data
 
 
 def process_pitch_rows(pitch_rows: list) -> list[dict]:
@@ -266,6 +228,20 @@ def process_pitch_rows(pitch_rows: list) -> list[dict]:
 
 # p.hit_speed IS NOT NULL AND
 def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]:
+    query = '''
+            SELECT 
+                batter_name,
+                league,
+                GROUP_CONCAT(zone) as zones,
+                GROUP_CONCAT(description) as descriptions,
+                GROUP_CONCAT(hit_speed) as percentile_90,
+                AVG(CAST(hit_speed AS REAL)) AS ev,
+                MAX(CAST(hit_speed AS REAL)) AS max_ev,
+                AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle
+            FROM all_plays
+            GROUP BY league, batter_name
+        '''
+    batter_data = select_data(query)
     conn, cursor = connect()
     if pitch_query is None:
         pitch_query = '''
@@ -282,10 +258,10 @@ def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]
             '''
     cursor.execute(pitch_query, dates)
     pitch_rows = cursor.fetchall()
-    batter_data = process_batter_rows()
+    batter_rows = process_batter_rows(batter_data)
     pitcher_data = process_pitch_rows(pitch_rows)
     conn.close()
-    return batter_data, pitcher_data
+    return batter_rows, pitcher_data
 
 
 def retrieve_data(pk_dict: dict):

@@ -3,6 +3,7 @@ from typing import *
 
 
 def calculate_contacts(descriptions: List[str], zones: List[str]) -> Tuple[float, float, float]:
+    zones = [int(x) for x in zones]
     out_of_zone = 0
     in_zone_contact = 0
     in_zone = 0
@@ -32,7 +33,11 @@ def calculate_contacts(descriptions: List[str], zones: List[str]) -> Tuple[float
 
 def add_percentile(row: Union[List, Dict]) -> Union[List, Dict]:
     if isinstance(row, dict):
-        hit_speeds = row.get('percentile_90', '').split(',')
+        hit_speeds = row.get('percentile_90', '')
+        if hit_speeds is None:
+            row['percentile_90'] = 0
+            return row
+        hit_speeds = hit_speeds.split(',')
     else:
         hit_speeds = row[-1].split(',')
     hit_speeds = [float(speed) for speed in hit_speeds if speed is not None]
