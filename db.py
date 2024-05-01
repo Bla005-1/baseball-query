@@ -226,6 +226,22 @@ def process_pitch_rows(pitch_rows: list) -> list[dict]:
     return pitcher_data
 
 
+'''
+SELECT league, 
+    pitcher_name, 
+    pitch_name, 
+    COUNT(*) AS count,
+    AVG(CAST(start_speed AS REAL)) AS avg_velo,
+    MAX(CAST(start_speed AS REAL)) AS max_velo,
+    AVG(CAST(spin_rate AS REAL)) AS avg_spin,
+    AVG(CAST(pfxZ AS REAL)) AS v_break,
+    AVG(CAST(pfxX AS REAL)) AS h_break,
+    GROUP_CONCAT(description) AS descriptions
+FROM all_plays
+GROUP BY league, pitcher_name, pitch_name
+'''
+
+
 # p.hit_speed IS NOT NULL AND
 def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]:
     query = '''
@@ -239,9 +255,10 @@ def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]
                 MAX(CAST(hit_speed AS REAL)) AS max_ev,
                 AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle
             FROM all_plays
+            WHERE date BETWEEN ? AND ?
             GROUP BY league, batter_name
         '''
-    batter_data = select_data(query)
+    batter_data = select_data(query, dates)
     conn, cursor = connect()
     if pitch_query is None:
         pitch_query = '''
@@ -269,14 +286,13 @@ def retrieve_data(pk_dict: dict):
         data_queue.put(plays)
 
 
-def insert_batch_data(batch: list[list[dict]]):
-    conn, cursor = connect()
+def insert_batch_data(batch: list[list[dict]], cursor):
     columns = [str(x) for x in db_keys.keys()]
     q_values = ['?' for x in columns]
     query = f'INSERT INTO all_plays ({", ".join(columns)}) VALUES ({", ".join(q_values)})'
     for b in batch:
         debug.increment('DB', 'counted_games')
-        conn.execute('BEGIN TRANSACTION')
+
         for item in b:
             debug.increment('DB', 'total_plays')
             for key, value in item.items():
@@ -299,13 +315,13 @@ def insert_batch_data(batch: list[list[dict]]):
                 debug.increment('DB', 'inserted_plays')
             except sqlite3.IntegrityError:
                 debug.increment('DB', 'overwritten_plays')
-        conn.commit()
-    conn.close()
 
 
 def insert_queue_data(total: int):
     progress_bar = tqdm(total=total, unit='iteration')
     count = 0
+    conn, cursor = connect()
+    conn.execute('BEGIN TRANSACTION')
     while count < total:
         batch = []
         for i in range(30):
@@ -322,8 +338,10 @@ def insert_queue_data(total: int):
             batch.append(data)
             data_queue.task_done()
 
-        insert_batch_data(batch)
+        insert_batch_data(batch, cursor)
     progress_bar.close()
+    conn.commit()
+    conn.close()
 
 
 def initialize_threads(pk_dict: dict[str: list[int]]):

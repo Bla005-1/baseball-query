@@ -91,7 +91,7 @@ def find_era_plays(start_date: str, end_date: str) -> list[tuple[str]]:
 
 
 def insert_era_plays(era_plays: list[tuple[str]]):
-    create_era_table()
+    # create_era_table()
     conn, cursor = connect()
     query = '''INSERT INTO era_pointers
             (pitcher_name, batter_name, play_id_hit, play_id_scored, date, game_pk, league)

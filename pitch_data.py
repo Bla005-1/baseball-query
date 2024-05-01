@@ -66,10 +66,10 @@ def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
             AVG(spin_rate) AS avg_spin_rate,
             AVG(breakZ) AS avg_breakZ,
             AVG(breakX) AS avg_breakX,
-            SUM(CASE WHEN LOWER(description) LIKE '%strike%' OR LOWER(description) LIKE '%foul tip%' OR 
-             LOWER(description) LIKE '%swinging pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
-            SUM(CASE WHEN LOWER(description) LIKE '%swinging%' OR LOWER(description) 
-             LIKE '%foul tip%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS swinging_strike_percentage,
+            SUM(CASE WHEN description LIKE '%Strike%' OR description LIKE '%Foul Tip%' OR 
+             description LIKE '%Swinging Pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
+            SUM(CASE WHEN LOWER(description) LIKE '%swinging%' OR description
+             LIKE '%Foul Tip%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS swinging_strike_percentage,
             SUM(CASE WHEN LOWER(description) LIKE '%ball%' OR LOWER(description) LIKE '%hit by%' OR LOWER(description) 
              LIKE '%pitchout%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS ball_percentage
         FROM all_plays

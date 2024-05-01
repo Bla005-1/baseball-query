@@ -1,4 +1,5 @@
 import time
+import typing
 from utils import connect, select_data
 from common_data import add_percentile, calculate_contacts
 
@@ -10,7 +11,7 @@ at_bat_events = [
 ]
 
 
-def get_batter_data(name: str, league: str, dates: tuple) -> dict:
+def get_batter_data(name: str, league: str, dates: typing.Tuple[str, str]) -> typing.Dict:
     args = [dates[0], dates[1], name]
     batt_query = '''
         SELECT
@@ -40,7 +41,7 @@ def get_batter_data(name: str, league: str, dates: tuple) -> dict:
     return processed_rows
 
 
-def process_batter_rows(batter_data: list[dict]):
+def process_batter_rows(batter_data: typing.List[typing.Dict]):
     processed_data = []
     for batter_row in batter_data:
         hit_speeds = batter_row.get('percentile_90', '')
@@ -61,7 +62,7 @@ def process_batter_rows(batter_data: list[dict]):
     return processed_data
 
 
-def basic_batt_calcs(name: str, league: str, dates: tuple) -> dict:
+def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> typing.Dict:
     start_time = time.time()
     args = [dates[0], dates[1], name]
     batt_query = '''
@@ -196,9 +197,6 @@ def build_range_query(leagues: list[str], total=False):
         AND pitch_name IS NOT NULL
         {'GROUP BY pitch_name' if not total else ''}
     '''
-
-
-
 
 
 def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tuple], dict[str: tuple]]:
