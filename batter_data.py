@@ -2,13 +2,7 @@ import time
 import typing
 from utils import connect, select_data
 from common_data import add_percentile, calculate_contacts
-
-at_bat_events = [
-    'Double', 'Strikeout', 'Flyout', 'Single', 'Forceout', 'Pop Out', 'Groundout',
-    'GIDP', 'Field Error', 'Lineout', 'Fielders Choice', 'Double Play', 'Home Run', 'Stolen Base 3B', 'Triple',
-    'Fielders Choice Out', 'Batter Out', 'Field Out', 'Strikeout Double Play', 'Bunt Pop Out',
-    'Bunt Lineout', 'Bunt Groundout', 'Field Out', 'Batter Out', 'Triple Play', 'Runner Double Play'
-]
+from static_data import at_bat_events
 
 
 def get_batter_data(name: str, league: str, dates: typing.Tuple[str, str]) -> typing.Dict:
@@ -19,12 +13,12 @@ def get_batter_data(name: str, league: str, dates: typing.Tuple[str, str]) -> ty
             league,
             pitch_name,
             COUNT(*) AS seen,
-            AVG(CAST(hit_speed AS REAL)) AS avg_velo,
-            MAX(CAST(hit_speed AS REAL)) AS max_velo,
-            AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle,
+            AVG(CAST(launch_speed AS REAL)) AS avg_velo,
+            MAX(CAST(launch_speed AS REAL)) AS max_velo,
+            AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle,
             GROUP_CONCAT(zone) as zones,
             GROUP_CONCAT(description) as descriptions,
-            GROUP_CONCAT(hit_speed) as percentile_90
+            GROUP_CONCAT(launch_speed) as percentile_90
         FROM all_plays
         WHERE date BETWEEN ? AND ? AND batter_name = ?
         AND pitch_name IS NOT NULL
@@ -66,14 +60,15 @@ def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> t
     start_time = time.time()
     args = [dates[0], dates[1], name]
     batt_query = '''
-        SELECT game_pk, ab_number, inning, px, pz, sz_top, sz_bot, description, des, events  
+        SELECT game_pk, at_bat_index, inning, p_x, p_z, strike_zone_top, strike_zone_bottom, pitch_result, 
+        description, event 
         FROM all_plays
         WHERE date BETWEEN ? AND ? AND batter_name = ?
     '''
     if league:
         batt_query += ' AND league = ?'
         args.append(league)
-    batt_query += ' ORDER BY game_pk, inning, ab_number'
+    batt_query += ' ORDER BY game_pk, inning, at_bat_index'
     rows = select_data(batt_query, args)
     sac_b = 0
     sac_f = 0
@@ -99,18 +94,18 @@ def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> t
         if current_game != row['game_pk']:
             current_game = row['game_pk']
             games += 1
-        if 'play' in row['description']:
+        if 'play' in row['pitch_result']:
             contact += 1
-        if row['px'] is not None:
-            if row['px'] < -17/2 or row['px'] > 17/2 or row['pz'] < row['sz_bot'] or row['pz'] > row['sz_top']:
+        if row['p_x'] is not None:
+            if row['p_x'] < -17/2 or row['p_x'] > 17/2 or row['p_z'] < row['strike_zone_bottom'] or row['p_z'] > row['strike_zone_top']:
                 outside_pitches += 1
-                if row['description'] in ['Swinging Strike', 'Foul', 'Foul Tip']:
+                if row['pitch_result'] in ['Swinging Strike', 'Foul', 'Foul Tip']:
                     missed_swings += 1
-        if row['ab_number'] != current_ab:
-            current_ab = row['ab_number']
+        if row['at_bat_index'] != current_ab:
+            current_ab = row['at_bat_index']
             pa += 1
-            event = row['events']
-            des = row['des']
+            event = row['event']
+            des = row['description']
             if event in hit_keywords and 'error' not in des:
                 hits += 1
             if event in at_bat_events:
@@ -143,8 +138,8 @@ def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> t
     walk_percent = walks / pa * 100
     chase_percent = missed_swings / outside_pitches * 100
     conn, cursor = connect()
-    query = f'SELECT des FROM all_plays WHERE (des LIKE "%{name} steals%" OR des LIKE "%{name}  steals%") ' \
-            'AND date BETWEEN ? AND ? GROUP BY game_pk, ab_number'
+    query = f'SELECT description FROM all_plays WHERE (description LIKE "%{name} steals%" OR description LIKE "%{name}  steals%") ' \
+            'AND date BETWEEN ? AND ? GROUP BY game_pk, at_bat_index'
     cursor.execute(query, dates)
     steals = cursor.fetchall()
     query = query.replace('steals', 'scores')
@@ -166,14 +161,14 @@ def build_calcs_query(leagues: list[str], total=False):
         SELECT
             {"'Total' AS pitch_name" if total else 'pitch_name'},
             COUNT(*) AS seen,
-            SUM(CASE WHEN LOWER(description) LIKE '%foul%' OR LOWER(description) LIKE '%play%' THEN 1 ELSE 0 END) AS bb,
-            AVG(CAST(hit_speed AS REAL)) AS avg_velo,
-            MAX(CAST(hit_speed AS REAL)) AS max_velo,
-            AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle,
-            CAST(SUM(CASE WHEN description LIKE '%In play%' OR description = 'Foul'
-            THEN 1 ELSE 0 END) AS REAL) / SUM(CASE WHEN description LIKE '%In play%' OR description LIKE '%Foul%' 
-            OR description LIKE '%Swinging%' THEN 1 ELSE 0 END) * 100.0 AS contact_percent,
-            GROUP_CONCAT(IFNULL(hit_speed, 'None'), ',') AS percentile_90
+            SUM(CASE WHEN LOWER(ab_result) LIKE '%foul%' OR LOWER(ab_result) LIKE '%play%' THEN 1 ELSE 0 END) AS bb,
+            AVG(CAST(launch_speed AS REAL)) AS avg_velo,
+            MAX(CAST(launch_speed AS REAL)) AS max_velo,
+            AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle,
+            CAST(SUM(CASE WHEN ab_result LIKE '%In play%' OR ab_result = 'Foul'
+            THEN 1 ELSE 0 END) AS REAL) / SUM(CASE WHEN ab_result LIKE '%In play%' OR ab_result LIKE '%Foul%' 
+            OR ab_result LIKE '%Swinging%' THEN 1 ELSE 0 END) * 100.0 AS contact_percent,
+            GROUP_CONCAT(IFNULL(launch_speed, 'None'), ',') AS percentile_90
         FROM all_plays
         WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?']*len(leagues)))} 
         AND pitch_name IS NOT NULL
@@ -187,9 +182,9 @@ def build_range_query(leagues: list[str], total=False):
             {"'Total' AS pitch_name" if total else 'pitch_name'},
             COUNT(*) AS seen,
             0,
-            MAX(CAST(hit_speed AS REAL)) - MIN(CAST(hit_speed AS REAL)) AS hit_speed_diff,
-            (MAX(CAST(hit_speed AS REAL)) - MIN(CAST(hit_speed AS REAL))) * 2 AS max_hit_speed_diff,
-            MAX(CAST(hit_angle AS REAL)) - MIN(CAST(hit_angle AS REAL)) AS hit_angle_diff,
+            MAX(CAST(launch_speed AS REAL)) - MIN(CAST(launch_speed AS REAL)) AS hit_speed_diff,
+            (MAX(CAST(launch_speed AS REAL)) - MIN(CAST(launch_speed AS REAL))) * 2 AS max_hit_speed_diff,
+            MAX(CAST(launch_angle AS REAL)) - MIN(CAST(launch_angle AS REAL)) AS launch_angle_diff,
             100 AS a,
             40 AS b
         FROM all_plays
@@ -228,4 +223,4 @@ def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tup
 
 
 if __name__ == '__main__':
-    print(get_batter_data('Freddie Freeman', 'MLB', ('2023-03-27', '2024-01-01')))
+    print(basic_batt_calcs('Freddie Freeman', 'MLB', ('2023-03-27', '2024-01-01')))

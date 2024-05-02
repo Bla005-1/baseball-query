@@ -1,18 +1,12 @@
 import math
 from utils import connect, select_data
 
-pitch_names = [
-    'Sinker', 'Slider', 'Changeup', 'Curveball', 'Cutter', '4-Seam Fastball',
-    'Splitter', 'Sweeper', 'Knuckle Curve', 'Knuckle Ball', 'Slurve', 'Slow Curve',
-    'Fastball', 'Eephus', 'Forkball', 'Screwball', '2-Seam Fastball'
-]
-
 
 def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
     args = [name, dates[0], dates[1]]
     query1 = 'SELECT * FROM era_pointers WHERE pitcher_name = ? AND date BETWEEN ? AND ?'
     query2 = '''
-            SELECT pitcher_name, events, outs, inning, game_pk
+            SELECT pitcher_name, event, outs, inning, game_pk
             FROM all_plays
             WHERE pitcher_name = ? AND date BETWEEN ? AND ?
             '''
@@ -20,7 +14,7 @@ def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
         query1 += ' AND league = ?'
         query2 += ' AND league = ?'
         args.append(league)
-    query2 += ' GROUP BY game_pk, ab_number ORDER BY game_pk, ab_number'
+    query2 += ' GROUP BY game_pk, at_bat_index ORDER BY game_pk, at_bat_index'
     er_plays = select_data(query1, args, None)
     rows = select_data(query2, args)
     current_inning = None
@@ -43,7 +37,7 @@ def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
             current_inning = inning
         if outs != current_out:
             ip += (1/3)
-        event = row['events']
+        event = row['event']
         if event == 'Walk':
             walks += 1
         elif 'strikeout' in event.lower():
@@ -66,11 +60,11 @@ def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
             AVG(spin_rate) AS avg_spin_rate,
             AVG(breakZ) AS avg_breakZ,
             AVG(breakX) AS avg_breakX,
-            SUM(CASE WHEN description LIKE '%Strike%' OR description LIKE '%Foul Tip%' OR 
-             description LIKE '%Swinging Pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
-            SUM(CASE WHEN LOWER(description) LIKE '%swinging%' OR description
+            SUM(CASE WHEN ab_result LIKE '%Strike%' OR ab_result LIKE '%Foul Tip%' OR 
+             ab_result LIKE '%Swinging Pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
+            SUM(CASE WHEN LOWER(ab_result) LIKE '%swinging%' OR ab_result
              LIKE '%Foul Tip%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS swinging_strike_percentage,
-            SUM(CASE WHEN LOWER(description) LIKE '%ball%' OR LOWER(description) LIKE '%hit by%' OR LOWER(description) 
+            SUM(CASE WHEN LOWER(ab_result) LIKE '%ball%' OR LOWER(ab_result) LIKE '%hit by%' OR LOWER(ab_result) 
              LIKE '%pitchout%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS ball_percentage
         FROM all_plays
         WHERE date BETWEEN ? AND ? AND pitcher_name = ?
@@ -97,11 +91,11 @@ def build_calcs_query(leagues: list[str], total=False):
             AVG(spin_rate) AS avg_spin_rate,
             AVG(breakZ) AS avg_breakZ,
             AVG(breakX) AS avg_breakX,
-            SUM(CASE WHEN LOWER(description) LIKE '%strike%' OR LOWER(description) LIKE '%foul tip%' OR 
-             LOWER(description) LIKE '%swinging pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
-            SUM(CASE WHEN LOWER(description) LIKE '%swinging%' OR LOWER(description) 
+            SUM(CASE WHEN LOWER(ab_result) LIKE '%strike%' OR LOWER(ab_result) LIKE '%foul tip%' OR 
+             LOWER(ab_result) LIKE '%swinging pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
+            SUM(CASE WHEN LOWER(ab_result) LIKE '%swinging%' OR LOWER(ab_result) 
              LIKE '%foul tip%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS swinging_strike_percentage,
-            SUM(CASE WHEN LOWER(description) LIKE '%ball%' OR LOWER(description) LIKE '%hit by%' OR LOWER(description) 
+            SUM(CASE WHEN LOWER(ab_result) LIKE '%ball%' OR LOWER(ab_result) LIKE '%hit by%' OR LOWER(ab_result) 
              LIKE '%pitchout%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS ball_percentage
         FROM all_plays
         WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?']*len(leagues)))} 

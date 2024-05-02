@@ -35,7 +35,7 @@ def dict_factory(cursor, row):
 
 
 def connect():
-    conn = sqlite3.connect('C:/Users/bryce/py_projects/baseball_stats/baseball_plays.db')
+    conn = sqlite3.connect('baseball_plays.db')
     cursor = conn.cursor()
     return conn, cursor
 

@@ -44,10 +44,11 @@ def find_era_plays(start_date: str, end_date: str) -> list[tuple[str]]:
     era_plays = []
     in_play = ['Single', 'Double', 'Triple']
     query = '''
-            SELECT pitcher_name, batter_name, events, des, date, game_pk, league, play_id, inning, ab_number
+            SELECT pitcher_name, batter_name, pitch_result, description, date, game_pk, league, play_id, inning, 
+            at_bat_index
             FROM all_plays
             WHERE date BETWEEN ? AND ?
-            ORDER BY game_pk, ab_number
+            ORDER BY game_pk, at_bat_index
         '''
     rows = select_data(query, (start_date, end_date))
     print(len(rows))
@@ -58,11 +59,11 @@ def find_era_plays(start_date: str, end_date: str) -> list[tuple[str]]:
         for inning in game:
             on_base = []
             for play in inning:
-                ab_number = play['ab_number']
+                ab_number = play['at_bat_index']
                 pitcher_name = play['pitcher_name']
                 batter_name = play['batter_name']
-                event = play['events']
-                des = play['des']
+                event = play['pitch_result']
+                des = play['description']
                 if current_ab == ab_number or des is None or play['play_id'] is None:
                     continue
                 current_ab = ab_number

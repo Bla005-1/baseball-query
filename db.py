@@ -16,6 +16,7 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 from utils import DebugManager, connect, select_data
 from batter_data import process_batter_rows
+from static_data import db_keys
 
 logging.basicConfig(
     filename='daily_update.log',
@@ -29,40 +30,15 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
 
 data_queue = Queue(maxsize=100)
 
-db_keys = {'play_id': 'TEXT PRIMARY KEY', 'inning': 'INTEGER', 'ab_number': 'INTEGER', 'cap_index': 'INTEGER',
-           'outs': 'INTEGER', 'batter': 'INTEGER', 'stand': 'TEXT', 'batter_name': 'TEXT', 'pitcher': 'INTEGER',
-           'p_throws': 'TEXT', 'pitcher_name': 'TEXT', 'team_batting': 'TEXT', 'team_fielding': 'TEXT',
-           'team_batting_id': 'INTEGER', 'team_fielding_id': 'INTEGER', 'result': 'TEXT', 'des': 'TEXT',
-           'events': 'TEXT', 'strikes': 'INTEGER', 'balls': 'INTEGER', 'pre_strikes': 'INTEGER',
-           'pre_balls': 'INTEGER', 'call': 'TEXT', 'call_name': 'TEXT', 'pitch_type': 'TEXT',
-           'pitch_name': 'TEXT',
-           'description': 'TEXT', 'result_code': 'TEXT', 'pitch_call': 'TEXT', 'is_strike_swinging': 'INTEGER',
-           'balls_and_strikes': 'TEXT', 'start_speed': 'INTEGER', 'end_speed': 'REAL', 'sz_top': 'REAL',
-           'sz_bot': 'REAL', 'extension': 'REAL', 'plateTime': 'REAL', 'zone': 'INTEGER', 'spin_rate': 'INTEGER',
-           'px': 'REAL', 'pz': 'REAL', 'x0': 'REAL', 'y0': 'REAL', 'z0': 'REAL', 'ax': 'REAL', 'ay': 'REAL',
-           'az': 'REAL', 'vx0': 'REAL', 'vy0': 'REAL', 'vz0': 'REAL', 'pfxX': 'REAL', 'pfxZ': 'REAL',
-           'pfxZWithGravity': 'REAL', 'pfxZWithGravityNice': 'INTEGER', 'pfxZDirection': 'TEXT',
-           'pfxXWithGravity': 'INTEGER', 'pfxXNoAbs': 'TEXT', 'pfxXDirection': 'TEXT', 'breakX': 'INTEGER',
-           'breakZ': 'INTEGER', 'inducedBreakZ': 'INTEGER', 'is_bip_out': 'TEXT', 'pitch_number': 'INTEGER',
-           'player_total_pitches': 'INTEGER', 'player_total_pitches_pitch_types': 'INTEGER',
-           'game_total_pitches': 'INTEGER', 'rowId': 'TEXT', 'game_pk': 'TEXT', 'player_name': 'TEXT',
-           'date': 'TEXT',
-           'league': 'TEXT', 'homeRunBallparks': 'TEXT', 'averageLaunchSpeedPlayer': 'TEXT',
-           'maxLaunchSpeedPlayer': 'TEXT', 'launchSpeedPlayerRank': 'TEXT', 'averageLaunchSpeedLeague': 'TEXT',
-           'maxLaunchSpeedLeague': 'TEXT', 'launchSpeedLeagueRank': 'TEXT', 'hit_speed_round': 'TEXT',
-           'hit_speed': 'TEXT', 'hit_distance': 'TEXT', 'xba': 'TEXT', 'hit_angle': 'TEXT',
-           'is_barrel': 'INTEGER',
-           'hc_x': 'REAL', 'hc_x_ft': 'REAL', 'hc_y': 'REAL', 'hc_y_ft': 'REAL', 'runnerOn1B': 'INTEGER',
-           'runnerOn2B': 'INTEGER', 'runnerOn3B': 'INTEGER'}
-
 
 def create_all_plays_table():
     columns = ', '.join([f"{column} {data_type}" for column, data_type in db_keys.items()])
     table_query = f'CREATE TABLE IF NOT EXISTS all_plays ({columns})'
     conn, cursor = connect()
     cursor.execute(table_query)
+    conn.commit()
     indexes = ['batter_name', 'date', 'league', 'pitch_name', 'pitcher_name',
-               'team_fielding', 'game_pk', 'inning', 'ab_number']
+               'team_fielding', 'game_pk', 'inning', 'at_bat_index']
     index_query = 'CREATE INDEX IF NOT EXISTS idx_blank ON all_plays (blank);'
     for idx in indexes:
         cursor.execute(index_query.replace('blank', idx))
@@ -250,10 +226,10 @@ def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]
                 league,
                 GROUP_CONCAT(zone) as zones,
                 GROUP_CONCAT(description) as descriptions,
-                GROUP_CONCAT(hit_speed) as percentile_90,
-                AVG(CAST(hit_speed AS REAL)) AS ev,
-                MAX(CAST(hit_speed AS REAL)) AS max_ev,
-                AVG(CAST(hit_angle AS REAL)) AS avg_hit_angle
+                GROUP_CONCAT(launch_speed) as percentile_90,
+                AVG(CAST(launch_speed AS REAL)) AS ev,
+                MAX(CAST(launch_speed AS REAL)) AS max_ev,
+                AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
             FROM all_plays
             WHERE date BETWEEN ? AND ?
             GROUP BY league, batter_name
@@ -263,10 +239,10 @@ def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]
     if pitch_query is None:
         pitch_query = '''
                 SELECT league, pitcher_name,
-                    GROUP_CONCAT(IFNULL(CAST(pfxZ AS REAL), 'None') || ',' || IFNULL(CAST(pfxX AS REAL), 'None') 
-                    || ',' || IFNULL(REPLACE(description, ',', '-'), 'None') || ',' || 
-                    IFNULL(REPLACE(des, ',', '-'), 'None') || ',' || IFNULL(result, 'None') || ',' || 
-                    IFNULL(ab_number, 'None')
+                    GROUP_CONCAT(IFNULL(CAST(pfx_z AS REAL), 'None') || ',' || IFNULL(CAST(pfx_x AS REAL), 'None') 
+                    || ',' || IFNULL(REPLACE(pitch_result, ',', '-'), 'None') || ',' || 
+                    IFNULL(REPLACE(description, ',', '-'), 'None') || ',' || IFNULL(event, 'None') || ',' || 
+                    IFNULL(at_bat_index, 'None')
                     || ',' || IFNULL(game_pk, 'None') || ',' || IFNULL(pitch_name, 'None') || ',' || 
                     IFNULL(spin_rate, 'None') || ',' || IFNULL(start_speed, 'None')) AS play_data
                 FROM all_plays
@@ -300,16 +276,7 @@ def insert_batch_data(batch: list[list[dict]], cursor):
                     item[key] = value.replace(',', ';')
             sorted_item = {}
             for column in columns:
-                if column == 'date':
-                    date = item.get(column)
-                    date_str = []
-                    for x in date.split('/'):
-                        if len(x) < 2:
-                            x = '0' + x
-                        date_str.append(x)
-                    sorted_item[column] = date_str[2] + '-' + date_str[0] + '-' + date_str[1]
-                else:
-                    sorted_item[column] = item.get(column, None)
+                sorted_item[column] = item.get(column, None)
             try:
                 cursor.execute(query, tuple(sorted_item.values()))
                 debug.increment('DB', 'inserted_plays')
@@ -337,7 +304,6 @@ def insert_queue_data(total: int):
 
             batch.append(data)
             data_queue.task_done()
-
         insert_batch_data(batch, cursor)
     progress_bar.close()
     conn.commit()
@@ -441,6 +407,7 @@ def daily_update(start_date=None, google=True):
 
 # date format is 2023-08-04
 if __name__ == '__main__':
+    # create_all_plays_table()
     try:
         os.chdir(os.path.dirname(__file__))
         if len(sys.argv) == 2:
