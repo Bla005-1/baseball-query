@@ -2,8 +2,10 @@ import numpy as np
 from typing import *
 
 
-def calculate_contacts(pitch_results: List[str], zones: List[str]) -> Tuple[float, float, float]:
+def calculate_contacts(pitch_results: List[str], zones: List[str]) -> Dict:
     zones = [int(x) for x in zones]
+    if len(zones) < len(pitch_results):
+        zones = [0 for x in pitch_results]
     out_of_zone = 0
     in_zone_contact = 0
     in_zone = 0
@@ -28,9 +30,9 @@ def calculate_contacts(pitch_results: List[str], zones: List[str]) -> Tuple[floa
     contact_percent = contact / total_swings if total_swings else 0
     zone_contact = in_zone_contact / in_zone if in_zone else 0
     chase_percent = chase / out_of_zone if out_of_zone else 0
-    return {'contact_percent': contact_percent,
-            'zone_contact': zone_contact,
-            'chase_percent': chase_percent}
+    return {'contact_percent': round(contact_percent, 4),
+            'zone_contact': round(zone_contact, 4),
+            'chase_percent': round(chase_percent, 4)}
 
 
 def add_percentile(row: Union[List, Dict]) -> Union[List, Dict]:
@@ -65,10 +67,10 @@ def calculate_percents(pitch_results: List[str]) -> Tuple[float, float, float]:
             strikes += 1
         elif 'ball' in d.lower() or 'hit by' in d.lower() or d == 'Pitchout':
             balls += 1
-    strike_ratio = round(strikes / len(pitch_results), 4)
-    csw = round(strikes + swinging_strikes / len(pitch_results), 4)
-    swstr = round(swinging_strikes / len(pitch_results), 4)
-    ball_ratio = round(balls / len(pitch_results), 4)
+    strike_ratio = strikes / len(pitch_results)
+    csw = (strikes + swinging_strikes) / len(pitch_results)
+    swstr = swinging_strikes / len(pitch_results)
+    ball_ratio = balls / len(pitch_results)
     return {'o_strike_percent': strike_ratio * 100,
             'o_csw': csw * 100,
             'o_swstr': swstr * 100,

@@ -58,7 +58,7 @@ def get_initial_data(game_type: str) -> tuple[list, list]:
             batter_name,
             league,
             GROUP_CONCAT(zone) as zones,
-            GROUP_CONCAT(pitch_results) as pitch_results,
+            GROUP_CONCAT(pitch_result) as pitch_results,
             GROUP_CONCAT(launch_speed) as percentile_90,
             AVG(CAST(launch_speed AS REAL)) AS ev,
             MAX(CAST(launch_speed AS REAL)) AS max_ev,
@@ -93,15 +93,15 @@ def get_initial_data(game_type: str) -> tuple[list, list]:
     pitch_query3 = '''
         SELECT league,
             name,
-            SUM(pitches_thrown) AS pitches_thrown
+            SUM(pitches_thrown) AS pitches_thrown,
             SUM(strike_outs) AS strike_outs,
             SUM(base_on_balls) AS walks,
-            SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k-bb
+            SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k_bb
         FROM pitchers WHERE game_type = ?
         GROUP BY league, name
         '''
     batter_data = select_data(batt_query, game_type)
-    pitch_rows = select_data(pitch_query, game_type)
+    pitch_data = select_data(pitch_query, game_type)
     overall_pitchers = select_data(pitch_query2, game_type)
     more_overall_pitchers = select_data(pitch_query3, game_type)
     combined_overall = {}
@@ -109,11 +109,12 @@ def get_initial_data(game_type: str) -> tuple[list, list]:
         a = combined_overall.setdefault(p['league'] + p['pitcher_name'], {})
         a.update(calculate_percents(p.get('pitch_results', '').split(',')))
     for mp in more_overall_pitchers:
-        a = combined_overall.setdefault(mp['league'] + mp['pitcher_name'], {})
+        a = combined_overall.setdefault(mp['league'] + mp['name'], {})
+        mp.pop('name')
         a.update(mp)
     batter_rows = process_batter_rows(batter_data)
-    pitcher_data = process_pitch_rows(pitch_rows, combined_overall)
-    return batter_rows, pitcher_data
+    pitcher_rows = process_pitch_rows(pitch_data, combined_overall)
+    return batter_rows, pitcher_rows
 
 
 def retrieve_data(pk_dict: dict):
@@ -177,6 +178,8 @@ def process_batches(total: int):
             plays, players = data
             debug.increment('DB', 'total_plays', len(play_batch))
             play_batch.extend(plays)
+            if not players:
+                continue
             hitter_batch.extend(players['hitters'])
             pitcher_batch.extend(players['pitchers'])
             fielder_batch.extend(players['fielders'])
@@ -310,7 +313,7 @@ if __name__ == '__main__':
                 print('Format using YYYY-MM-DD')
                 exit(1)
         else:
-            daily_update(google=False)
+            daily_update(google=True)
     except Exception:
         log.error('An error occurred:', exc_info=True)
         exit(1)

@@ -9,6 +9,7 @@ def process_pitch_rows(pitch_data: typing.List[typing.Dict], overall_data: dict 
         overall_data = {}
     processed_data = []
     for pitch_row in pitch_data:
+        my_data = {}
         player = overall_data.get(pitch_row['league'] + pitch_row['pitcher_name'])
         descriptions = pitch_row.get('pitch_results', '').split(',')
         percents = calculate_percents(descriptions)
@@ -16,8 +17,9 @@ def process_pitch_rows(pitch_data: typing.List[typing.Dict], overall_data: dict 
         pitch_row['csw_percent'] = percents['o_csw']
         pitch_row['swstr_percent'] = percents['o_swstr']
         pitch_row.pop('pitch_results')
-        player.update(pitch_row)
-        processed_data.append(player)
+        my_data.update(player)
+        my_data.update(pitch_row)
+        processed_data.append(my_data)
     return processed_data
 
 

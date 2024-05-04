@@ -43,10 +43,14 @@ def process_batter_rows(batter_data: typing.List[typing.Dict]):
         hit_speeds = hit_speeds.split(',')  # don't let the dict key name confuse you
         batter_row = add_percentile(batter_row)
         descriptions = batter_row.get('pitch_results', '').split(',')
-        zones = batter_row.get('zones', '').split(',')
+        zones = batter_row.get('zones', '')
+        if zones is None:
+            zones = []
+        else:
+            zones = zones.split(',')
         percents = calculate_contacts(descriptions, zones)
         batter_row['bb'] = len([x for x in hit_speeds if x is not None])
-        batter_row.update(percents)
+        batter_row.update({k: v * 100 for k, v in percents.items()})
         batter_row.pop('zones')
         batter_row.pop('pitch_results')
         processed_data.append(batter_row)

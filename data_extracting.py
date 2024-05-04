@@ -146,7 +146,6 @@ def extract_game_stats(game_data):
 def extract_player_stats(data):
     game_data = data['gameData']
     if game_data['status']['codedGameState'] != 'F':
-        print(game_data['game'])
         return []
     game_stats = extract_game_stats(game_data)
     if game_stats is None:
