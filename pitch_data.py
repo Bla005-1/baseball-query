@@ -1,51 +1,46 @@
 import math
+import typing
 from utils import connect, select_data
+from common_data import calculate_percents
 
 
-def basic_pitch_calcs(name: str, league: str, dates: tuple[str, str]):
-    args = [name, dates[0], dates[1]]
-    query1 = 'SELECT * FROM era_pointers WHERE pitcher_name = ? AND date BETWEEN ? AND ?'
-    query2 = '''
-            SELECT pitcher_name, event, outs, inning, game_pk
-            FROM all_plays
-            WHERE pitcher_name = ? AND date BETWEEN ? AND ?
-            '''
+def process_pitch_rows(pitch_data: typing.List[typing.Dict], overall_data: dict = None):
+    if overall_data is None:
+        overall_data = {}
+    processed_data = []
+    for pitch_row in pitch_data:
+        player = overall_data.get(pitch_row['league'] + pitch_row['pitcher_name'])
+        descriptions = pitch_row.get('pitch_results', '').split(',')
+        percents = calculate_percents(descriptions)
+        pitch_row['strike_percent'] = percents['o_strike_percent']
+        pitch_row['csw_percent'] = percents['o_csw']
+        pitch_row['swstr_percent'] = percents['o_swstr']
+        pitch_row.pop('pitch_results')
+        player.update(pitch_row)
+        processed_data.append(player)
+    return processed_data
+
+
+def basic_pitch_calcs(name: str, league: str = None, dates: tuple[str, str] = None, game_type: str = None):
+    args = [name]
+    query = '''
+        SELECT SUM(innings_pitched) AS IP,
+            9 * SUM(earned_runs) / SUM(innings_pitched) AS ERA,
+            SUM(strike_outs) / SUM(CAST(batters_faced AS REAL)) AS strikeout_ratio,
+            SUM(base_on_balls) / SUM(CAST(batters_faced AS REAL)) AS walk_ratio
+        FROM pitchers WHERE name = ?
+    '''
     if league:
-        query1 += ' AND league = ?'
-        query2 += ' AND league = ?'
+        query += ' AND league = ?'
         args.append(league)
-    query2 += ' GROUP BY game_pk, at_bat_index ORDER BY game_pk, at_bat_index'
-    er_plays = select_data(query1, args, None)
-    rows = select_data(query2, args)
-    current_inning = None
-    current_game = None
-    current_out = 0
-    ip = 0
-    walks = 0
-    strikeouts = 0
-    batters_faced = 0
-    for row in rows:
-        batters_faced += 1
-        game_pk = row['game_pk']
-        outs = row['outs']
-        inning = row['inning']
-        if game_pk != current_game:
-            current_game = game_pk
-            current_out = outs
-        if inning != current_inning:
-            current_out = outs
-            current_inning = inning
-        if outs != current_out:
-            ip += (1/3)
-        event = row['event']
-        if event == 'Walk':
-            walks += 1
-        elif 'strikeout' in event.lower():
-            strikeouts += 1
-    era = 9 * len(er_plays) / ip
-    k = strikeouts / batters_faced * 100
-    bb = walks / batters_faced * 100
-    return {'IP': ip, 'ERA': '{:.2f}'.format(era), 'K%': '{:.2f}'.format(k), 'BB%': '{:.2f}'.format(bb)}
+    if dates:
+        query += ' AND date BETWEEN ? AND ?'
+        args.extend([dates[0], dates[1]])
+    if game_type:
+        query += ' AND game_type = ?'
+        args.append(game_type)
+    calcs = select_data(query, args)[0]
+    return {k: round(v, 3) for k, v in calcs.items()}
 
 
 # could make get_data a common function between pitch and batt since only query is different
@@ -182,4 +177,4 @@ def calc_release_pos(data) -> tuple[float, float]:
 
 
 if __name__ == '__main__':
-    print(basic_pitch_calcs('Ronel Blanco', 'MLB', ('2024-03-20', '2024-04-14')))
+    print(basic_pitch_calcs('Ronel Blanco', 'MLB', ('2024-03-20', '2024-05-04')))

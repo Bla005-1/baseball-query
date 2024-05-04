@@ -2,7 +2,6 @@ import time
 import typing
 from utils import connect, select_data
 from common_data import add_percentile, calculate_contacts
-from static_data import at_bat_events
 
 
 def get_batter_data(name: str, league: str, dates: typing.Tuple[str, str]) -> typing.Dict:
@@ -43,7 +42,7 @@ def process_batter_rows(batter_data: typing.List[typing.Dict]):
             hit_speeds = ''
         hit_speeds = hit_speeds.split(',')  # don't let the dict key name confuse you
         batter_row = add_percentile(batter_row)
-        descriptions = batter_row.get('descriptions', '').split(',')
+        descriptions = batter_row.get('pitch_results', '').split(',')
         zones = batter_row.get('zones', '').split(',')
         contact_percent, zone_contact, chase_percent = calculate_contacts(descriptions, zones)
         batter_row['bb'] = len([x for x in hit_speeds if x is not None])
@@ -51,7 +50,7 @@ def process_batter_rows(batter_data: typing.List[typing.Dict]):
         batter_row['zone_contact'] = zone_contact
         batter_row['chase'] = chase_percent
         batter_row.pop('zones')
-        batter_row.pop('descriptions')
+        batter_row.pop('pitch_results')
         processed_data.append(batter_row)
     return processed_data
 
@@ -60,100 +59,55 @@ def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> t
     start_time = time.time()
     args = [dates[0], dates[1], name]
     batt_query = '''
-        SELECT game_pk, at_bat_index, inning, p_x, p_z, strike_zone_top, strike_zone_bottom, pitch_result, 
-        description, event 
-        FROM all_plays
-        WHERE date BETWEEN ? AND ? AND batter_name = ?
+        SELECT 
+            SUM(runs) AS runs,
+            SUM(doubles) AS doubles,
+            SUM(triples) AS triples,
+            SUM(home_runs) AS home_runs,
+            SUM(strike_outs) AS strike_outs,
+            SUM(base_on_balls) AS base_on_balls,
+            SUM(hits) AS hits,
+            SUM(at_bats) AS at_bats,
+            SUM(stolen_bases) AS stolen_bases,
+            SUM(plate_appearances) AS plate_appearances,
+            SUM(total_bases) AS total_bases,
+            SUM(rbi) AS rbi,
+            SUM(sac_flies) AS sac_flies,
+            SUM(hit_by_pitch) AS hit_by_pitch,
+            SUM(games_played) AS games
+        FROM hitters
+        WHERE date BETWEEN ? AND ? AND name = ?
     '''
     if league:
         batt_query += ' AND league = ?'
         args.append(league)
-    batt_query += ' ORDER BY game_pk, inning, at_bat_index'
-    rows = select_data(batt_query, args)
-    sac_b = 0
-    sac_f = 0
-    pa = 0
-    ab = 0
-    rbi = 0
-    hr = 0
-    singles = 0
-    doubles = 0
-    triples = 0
-    walks = 0
-    strikeout = 0
-    missed_swings = 0
-    outside_pitches = 0
-    contact = 0
-    hit_by_pitch = 0
-    current_ab = 0
-    hit_keywords = ['Single', 'Double', 'Triple', 'Home Run']
-    hits = 0
-    games = 0
-    current_game = None
-    for row in rows:
-        if current_game != row['game_pk']:
-            current_game = row['game_pk']
-            games += 1
-        if 'play' in row['pitch_result']:
-            contact += 1
-        if row['p_x'] is not None:
-            if row['p_x'] < -17/2 or row['p_x'] > 17/2 or row['p_z'] < row['strike_zone_bottom'] or row['p_z'] > row['strike_zone_top']:
-                outside_pitches += 1
-                if row['pitch_result'] in ['Swinging Strike', 'Foul', 'Foul Tip']:
-                    missed_swings += 1
-        if row['at_bat_index'] != current_ab:
-            current_ab = row['at_bat_index']
-            pa += 1
-            event = row['event']
-            des = row['description']
-            if event in hit_keywords and 'error' not in des:
-                hits += 1
-            if event in at_bat_events:
-                ab += 1
-            if event == 'Single':
-                singles += 1
-            elif event == 'Double':
-                doubles += 1
-            elif event == 'Triple':
-                triples += 1
-            elif event == 'Home Run':
-                hr += 1
-            elif event == 'Sac Fly':
-                sac_f += 1
-            elif event == 'Sac Bunt':
-                sac_b += 1
-            if event != 'Field Error' and event != 'GIDP':
-                rbi += des.count('scores')
-            if event == 'Walk' or event == 'Intent Walk':
-                walks += 1
-            elif event == 'Hit By Pitch':
-                hit_by_pitch += 1
-            if 'Strikeout' in event:
-                strikeout += 1
-    rbi += hr
+    data = select_data(batt_query, args)[0]
+    print(data)
+    games = data['games']
+    if games is None:
+        return None
+    sac_f = data['sac_flies']
+    pa = data['plate_appearances']
+    ab = data['at_bats']
+    hr = data['home_runs']
+    doubles = data['doubles']
+    triples = data['triples']
+    walks = data['base_on_balls']
+    strikeout = data['strike_outs']
+    hit_by_pitch = data['hit_by_pitch']
+    hits = data['hits']
+    singles = hits - hr - triples - doubles
     obp = (hits + walks + hit_by_pitch) / (ab + hit_by_pitch + walks + sac_f)
     slg = (singles + doubles*2 + triples*3 + hr*4) / ab
     ba = hits / ab
     strikeout_percent = strikeout / pa * 100
     walk_percent = walks / pa * 100
-    chase_percent = missed_swings / outside_pitches * 100
-    conn, cursor = connect()
-    query = f'SELECT description FROM all_plays WHERE (description LIKE "%{name} steals%" OR description LIKE "%{name}  steals%") ' \
-            'AND date BETWEEN ? AND ? GROUP BY game_pk, at_bat_index'
-    cursor.execute(query, dates)
-    steals = cursor.fetchall()
-    query = query.replace('steals', 'scores')
-    cursor.execute(query, dates)
-    runs = cursor.fetchall()
-    runs = len(runs)
-    steals = len(steals)
-    conn.close()
     print('basic_batt_calcs: ', time.time() - start_time)
     return {'PA': pa, 'AB': ab, 'BA': '{:.4f}'.format(ba), 'OBP': '{:.4f}'.format(obp), 'SLG': '{:.4f}'.format(slg),
-            'HR': hr, 'R': runs, 'RBI': rbi, 'SB': steals, 'K%': '{:.2f}'.format(strikeout_percent),
-            'BB%': '{:.2f}'.format(walk_percent), 'Chase%': '{:.2f}'.format(chase_percent), 'singles': singles,
+            'HR': hr, 'R': data['runs'], 'RBI': data['rbi'], 'SB': data['stolen_bases'],
+            'K%': '{:.2f}'.format(strikeout_percent), 'BB%': '{:.2f}'.format(walk_percent), 'singles': singles,
             'doubles': doubles, 'triples': triples, 'H': hits, 'BB': walks, 'G': games,
-            'SO': strikeout}
+            'SO': strikeout, 'bases': data['total_bases']}
 
 
 def build_calcs_query(leagues: list[str], total=False):
@@ -223,4 +177,4 @@ def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tup
 
 
 if __name__ == '__main__':
-    print(basic_batt_calcs('Freddie Freeman', 'MLB', ('2023-03-27', '2024-01-01')))
+    print(basic_batt_calcs('Freddie Freeman', 'MLB', ('2023-03-27', '2024-05-03')))

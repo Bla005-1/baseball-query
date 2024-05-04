@@ -16,7 +16,9 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 from utils import DebugManager, connect, select_data
 from batter_data import process_batter_rows
-from static_data import db_keys
+from pitch_data import process_pitch_rows
+from static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys
+from common_data import calculate_percents
 
 logging.basicConfig(
     filename='daily_update.log',
@@ -31,269 +33,141 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
 data_queue = Queue(maxsize=100)
 
 
-def create_all_plays_table():
-    columns = ', '.join([f"{column} {data_type}" for column, data_type in db_keys.items()])
-    table_query = f'CREATE TABLE IF NOT EXISTS all_plays ({columns})'
+def create_table(table: str, key_relation: dict):
+    columns = ', '.join([f"{column} {data_type}" for column, data_type in key_relation.items()])
+    if table == 'all_plays':
+        indexes = ['batter_name', 'date', 'league', 'pitch_name', 'pitcher_name',
+                   'team_fielding', 'game_pk', 'inning', 'at_bat_index', 'game_type']
+    else:
+        columns += ', PRIMARY KEY (name, game_pk)'
+        indexes = ['name', 'date', 'game_pk', 'game_type']
+    table_query = f'CREATE TABLE IF NOT EXISTS {table} ({columns})'
     conn, cursor = connect()
     cursor.execute(table_query)
     conn.commit()
-    indexes = ['batter_name', 'date', 'league', 'pitch_name', 'pitcher_name',
-               'team_fielding', 'game_pk', 'inning', 'at_bat_index']
-    index_query = 'CREATE INDEX IF NOT EXISTS idx_blank ON all_plays (blank);'
+    index_query = f'CREATE INDEX IF NOT EXISTS idx_blank ON {table} (blank);'
     for idx in indexes:
         cursor.execute(index_query.replace('blank', idx))
     conn.commit()
     conn.close()
 
 
-def process_pitch_rows(pitch_rows: list) -> list[dict]:
-    pitcher_data = []
-    for play in pitch_rows:
-        league = play[0]
-        name = play[1]
-        play_data = play[2].split(',')
-        # remove trailing empty string caused by GROUP_CONCAT
-        if play_data[-1] == '':
-            play_data.pop()
-
-        interval = 10
-        play_data = [None if value == 'None' else value for value in play_data]
-        v_breaks = [play_data[x] for x in range(0, len(play_data), interval)]
-        h_breaks = [play_data[x] for x in range(1, len(play_data), interval)]
-        descriptions = [play_data[x] for x in range(2, len(play_data), interval)]
-        results = [play_data[x] for x in range(4, len(play_data), interval)]
-        ab_number = [float(play_data[x]) for x in range(5, len(play_data), interval) if play_data[x] is not None]
-        pks = [play_data[x] for x in range(6, len(play_data), interval)]
-        pitch_names = [play_data[x] for x in range(7, len(play_data), interval)]
-        spin_rates = [play_data[x] for x in range(8, len(play_data), interval)]
-        velocities = [play_data[x] for x in range(9, len(play_data), interval)]
-        all_strikes = 0
-        all_balls = 0
-        swinging_strikes = 0
-        for d in descriptions:
-            if 'strike' in d.lower() or 'foul tip' in d.lower() or 'swinging pitchout' in d.lower():
-                all_strikes += 1
-            if 'swinging' in d.lower() or 'foul tip' in d.lower():
-                swinging_strikes += 1
-            if 'ball' in d.lower() or 'hit by' in d.lower() or 'pitchout' in d.lower():
-                all_balls += 1
-
-        per_pitch = {'Total': {
-            'count': 0,
-            'velo': [],
-            'spin_rate': [],
-            'v_break': [],
-            'h_break': [],
-            'strikes': 0,
-            'swstr': 0,
-            'balls': 0
-        }}
-        for i in range(len(pitch_names)):
-            p_name = pitch_names[i]
-            if p_name is None:
-                p_name = 'None'
-            index = i
-            d = descriptions[index]
-            v = velocities[index]
-            s = spin_rates[index]
-            p = per_pitch.get(p_name)
-            t = per_pitch.get('Total')
-            v_break = v_breaks[index]
-            h_break = h_breaks[index]
-            t['count'] += 1
-            if p is not None:
-                p['count'] += 1
-                if 'strike' in d.lower() or 'foul tip' in d.lower() or 'swinging pitchout' in d.lower():
-                    p['strikes'] += 1
-                    t['strikes'] += 1
-                if 'swinging' in d.lower() or 'foul tip' in d.lower():
-                    p['swstr'] += 1
-                    t['swstr'] += 1
-                if 'ball' in d.lower() or 'hit by' in d.lower() or 'pitchout' in d.lower():
-                    p['balls'] += 1
-                    t['balls'] += 1
-                if v:
-                    p['velo'].append(float(v))
-                    t['velo'].append(float(v))
-                if s:
-                    p['spin_rate'].append(float(s))
-                    t['spin_rate'].append(float(s))
-                if v_break:
-                    p['v_break'].append(float(v_break) * 2)
-                    t['v_break'].append(float(v_break) * 2)
-                if h_break:
-                    p['h_break'].append(float(h_break) * 2)
-                    t['h_break'].append(float(h_break) * 2)
-            else:
-                per_pitch[p_name] = {
-                    'count': 1,
-                    'velo': [float(v)] if v else [],
-                    'spin_rate': [float(s)] if s else [],
-                    'v_break': [float(v_break) * 2] if v_break else [],
-                    'h_break': [float(h_break) * 2] if v_break else [],
-                    'strikes': 0,
-                    'swstr': 0,
-                    'balls': 0
-                }
-                if 'strike' in d.lower() or 'foul tip' in d.lower() or 'swinging pitchout' in d.lower():
-                    t['strikes'] += 1
-                if 'swinging' in d.lower() or 'foul tip' in d.lower():
-                    t['swstr'] += 1
-                if 'ball' in d.lower() or 'hit by' in d.lower() or 'pitchout' in d.lower():
-                    t['balls'] += 1
-                if v:
-                    t['velo'].append(float(v))
-                if s:
-                    t['spin_rate'].append(float(s))
-                if v_break:
-                    t['v_break'].append(float(v_break) * 2)
-                if h_break:
-                    t['h_break'].append(float(h_break) * 2)
-        abats = []
-        strikeout = 0
-        walk = 0
-        for i in range(len(results)):
-            ab = ab_number[i]
-            r = results[i]
-            pk = pks[i]
-            y = str(ab) + str(pk)
-            if y not in abats:
-                abats.append(y)
-                if 'strikeout' in r.lower():
-                    strikeout += 1
-                if 'walk' in r.lower():
-                    walk += 1
-        csw = all_strikes / len(descriptions) * 100
-        swstr = swinging_strikes / len(descriptions) * 100
-        strike_percent = (len(descriptions) - all_balls) / len(descriptions) * 100
-        ball_percent = all_balls / len(descriptions) * 100
-        strikeout_percent = strikeout / len(abats) * 100
-        walk_percent = walk / len(abats) * 100
-        kbb = strikeout_percent - walk_percent
-        for pitch_type, values in per_pitch.items():
-            for v in values.keys():
-                if isinstance(values[v], list):
-                    if len(values[v]) == 0:
-                        values[v] = [0]
-            pitcher_data.append(
-                {
-                    'league': league,
-                    'name': name,
-                    'total_pitches': len(descriptions),
-                    'csw': '{:.2f}'.format(csw),
-                    'swstr': '{:.2f}'.format(swstr),
-                    'strike_percent': '{:.2f}'.format(strike_percent),
-                    'ball_percent': '{:.2f}'.format(ball_percent),
-                    'strikeout_percent': '{:.2f}'.format(strikeout_percent),
-                    'walk_percent': '{:.2f}'.format(walk_percent),
-                    'k-bb': '{:.2f}'.format(kbb),
-                    'pitch_type': pitch_type,
-                    'count': int(values['count']),
-                    'Avg. Velo': '{:.2f}'.format(sum(values['velo']) / len(values['velo']) if values['velo'] else 0),
-                    'Max Velo': '{:.2f}'.format(max(values['velo'])),
-                    'Avg. Spin': '{:.2f}'.format(sum(values['spin_rate']) / len(values['spin_rate'])),
-                    'V break': '{:.2f}'.format(sum(values['v_break']) / len(values['v_break'])),
-                    'H break': '{:.2f}'.format(sum(values['h_break']) / len(values['h_break'])),
-                    'CSW %': '{:.2f}'.format(values['strikes'] / values['count'] * 100),
-                    'SwStr': '{:.2f}'.format(values['swstr'] / values['count'] * 100),
-                    'Strike %': '{:.2f}'.format((values['count'] - values['balls']) / values['count'] * 100)
-                })
-
-    return pitcher_data
-
-
-'''
-SELECT league, 
-    pitcher_name, 
-    pitch_name, 
-    COUNT(*) AS count,
-    AVG(CAST(start_speed AS REAL)) AS avg_velo,
-    MAX(CAST(start_speed AS REAL)) AS max_velo,
-    AVG(CAST(spin_rate AS REAL)) AS avg_spin,
-    AVG(CAST(pfxZ AS REAL)) AS v_break,
-    AVG(CAST(pfxX AS REAL)) AS h_break,
-    GROUP_CONCAT(description) AS descriptions
-FROM all_plays
-GROUP BY league, pitcher_name, pitch_name
-'''
-
-
 # p.hit_speed IS NOT NULL AND
-def get_initial_data(dates: tuple, pitch_query: str = None) -> tuple[list, list]:
-    query = '''
-            SELECT 
-                batter_name,
-                league,
-                GROUP_CONCAT(zone) as zones,
-                GROUP_CONCAT(description) as descriptions,
-                GROUP_CONCAT(launch_speed) as percentile_90,
-                AVG(CAST(launch_speed AS REAL)) AS ev,
-                MAX(CAST(launch_speed AS REAL)) AS max_ev,
-                AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
-            FROM all_plays
-            WHERE date BETWEEN ? AND ?
-            GROUP BY league, batter_name
+def get_initial_data(game_type: str) -> tuple[list, list]:
+    batt_query = '''
+        SELECT 
+            batter_name,
+            league,
+            GROUP_CONCAT(zone) as zones,
+            GROUP_CONCAT(pitch_results) as pitch_results,
+            GROUP_CONCAT(launch_speed) as percentile_90,
+            AVG(CAST(launch_speed AS REAL)) AS ev,
+            MAX(CAST(launch_speed AS REAL)) AS max_ev,
+            AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
+        FROM all_plays
+        WHERE game_type = ?
+        GROUP BY league, batter_name
         '''
-    batter_data = select_data(query, dates)
-    conn, cursor = connect()
-    if pitch_query is None:
-        pitch_query = '''
-                SELECT league, pitcher_name,
-                    GROUP_CONCAT(IFNULL(CAST(pfx_z AS REAL), 'None') || ',' || IFNULL(CAST(pfx_x AS REAL), 'None') 
-                    || ',' || IFNULL(REPLACE(pitch_result, ',', '-'), 'None') || ',' || 
-                    IFNULL(REPLACE(description, ',', '-'), 'None') || ',' || IFNULL(event, 'None') || ',' || 
-                    IFNULL(at_bat_index, 'None')
-                    || ',' || IFNULL(game_pk, 'None') || ',' || IFNULL(pitch_name, 'None') || ',' || 
-                    IFNULL(spin_rate, 'None') || ',' || IFNULL(start_speed, 'None')) AS play_data
-                FROM all_plays
-                WHERE des NOT LIKE '%bunt%' AND date BETWEEN ? AND ?
-                GROUP BY league, pitcher_name;
-            '''
-    cursor.execute(pitch_query, dates)
-    pitch_rows = cursor.fetchall()
+    pitch_query = '''
+        SELECT league, 
+            pitcher_name, 
+            pitch_name, 
+            COUNT(*) AS count,
+            AVG(CAST(start_speed AS REAL)) AS avg_velo,
+            MAX(CAST(start_speed AS REAL)) AS max_velo,
+            AVG(CAST(spin_rate AS REAL)) AS avg_spin,
+            AVG(CAST(pfx_z AS REAL)) AS v_break,
+            AVG(CAST(pfx_x AS REAL)) AS h_break,
+            GROUP_CONCAT(pitch_result) AS pitch_results
+        FROM all_plays 
+        WHERE game_type = ?
+        GROUP BY league, pitcher_name, pitch_name
+        '''
+    pitch_query2 = '''
+        SELECT league, 
+            pitcher_name,
+            COUNT(*) AS count,
+            GROUP_CONCAT(pitch_result) AS pitch_results
+        FROM all_plays WHERE game_type = ?
+        GROUP BY league, pitcher_name
+        '''
+    pitch_query3 = '''
+        SELECT league,
+            name,
+            SUM(pitches_thrown) AS pitches_thrown
+            SUM(strike_outs) AS strike_outs,
+            SUM(base_on_balls) AS walks,
+            SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k-bb
+        FROM pitchers WHERE game_type = ?
+        GROUP BY league, name
+        '''
+    batter_data = select_data(batt_query, game_type)
+    pitch_rows = select_data(pitch_query, game_type)
+    overall_pitchers = select_data(pitch_query2, game_type)
+    more_overall_pitchers = select_data(pitch_query3, game_type)
+    combined_overall = {}
+    for p in overall_pitchers:
+        a = combined_overall.setdefault(p['league'] + p['pitcher_name'], {})
+        a.update(calculate_percents(p.get('pitch_results', '').split(',')))
+    for mp in more_overall_pitchers:
+        a = combined_overall.setdefault(mp['league'] + mp['pitcher_name'], {})
+        a.update(mp)
     batter_rows = process_batter_rows(batter_data)
-    pitcher_data = process_pitch_rows(pitch_rows)
-    conn.close()
+    pitcher_data = process_pitch_rows(pitch_rows, combined_overall)
     return batter_rows, pitcher_data
 
 
 def retrieve_data(pk_dict: dict):
-    for plays in get_plays(pk_dict, debug):
-        data_queue.put(plays)
+    for data in get_plays(pk_dict, debug):
+        data_queue.put(data)
 
 
-def insert_batch_data(batch: list[list[dict]], cursor):
-    columns = [str(x) for x in db_keys.keys()]
-    q_values = ['?' for x in columns]
-    query = f'INSERT INTO all_plays ({", ".join(columns)}) VALUES ({", ".join(q_values)})'
-    for b in batch:
-        debug.increment('DB', 'counted_games')
+def execute_query(cursor, query, values):
+    try:
+        cursor.execute(query, values)
+        return True
+    except sqlite3.IntegrityError:
+        debug.increment(f'DB', 'overwritten_values')
+        return False
 
-        for item in b:
-            debug.increment('DB', 'total_plays')
-            for key, value in item.items():
-                if isinstance(value, str) and ',' in value:
+
+def process_single_batch(table, batch_data, columns, cursor):
+    q_values = ['?' for _ in columns]
+    query = f'INSERT INTO {table} ({", ".join(columns)}) VALUES ({", ".join(q_values)})'
+    for item in batch_data:
+        for key, value in item.items():
+            if isinstance(value, str):
+                if ',' in value:
                     item[key] = value.replace(',', ';')
-            sorted_item = {}
-            for column in columns:
-                sorted_item[column] = item.get(column, None)
-            try:
-                cursor.execute(query, tuple(sorted_item.values()))
-                debug.increment('DB', 'inserted_plays')
-            except sqlite3.IntegrityError:
-                debug.increment('DB', 'overwritten_plays')
+                if '.--' in value:
+                    item[key] = None
+        sorted_item = {column: item.get(column, None) for column in columns}
+        execute_query(cursor, query, tuple(sorted_item.values()))
+    cursor.close()
 
 
-def insert_queue_data(total: int):
-    progress_bar = tqdm(total=total, unit='iteration')
-    count = 0
+def threaded_batch_processing(table, batch_data, columns):
     conn, cursor = connect()
     conn.execute('BEGIN TRANSACTION')
+    try:
+        process_single_batch(table, batch_data, columns, cursor)
+    finally:
+        conn.commit()
+        conn.close()
+
+
+def process_batches(total: int):
+    progress_bar = tqdm(total=total, unit='iteration')
+    count = 0
+    threads = []
     while count < total:
-        batch = []
+        play_batch = []
+        hitter_batch = []
+        pitcher_batch = []
+        fielder_batch = []
         for i in range(30):
             try:
-                data = data_queue.get(timeout=10)
+                data = data_queue.get(timeout=1)
             except queue.Empty:
                 break
             progress_bar.update(1)
@@ -301,13 +175,33 @@ def insert_queue_data(total: int):
             if data == 'failed':
                 data_queue.task_done()
                 continue
-
-            batch.append(data)
+            plays, players = data
+            debug.increment('DB', 'total_plays', len(play_batch))
+            play_batch.extend(plays)
+            hitter_batch.extend(players['hitters'])
+            pitcher_batch.extend(players['pitchers'])
+            fielder_batch.extend(players['fielders'])
             data_queue.task_done()
-        insert_batch_data(batch, cursor)
+        debug.increment('DB', 'counted_games', len(play_batch))
+
+        tables = [
+            ('all_plays', play_batch, db_keys),
+            ('hitters', hitter_batch, hitter_db_keys),
+            ('pitchers', pitcher_batch, pitcher_db_keys),
+            ('fielders', fielder_batch, fielder_db_keys)
+        ]
+        for table, batch_data, db_k in tables:
+            keys = [str(x) for x in db_k.keys()]
+            thread = threading.Thread(target=threaded_batch_processing, args=(table, batch_data, keys))
+            thread.start()
+            threads.append(thread)
+        if len(threads) >= 12:
+            for thread in threads[:3]:
+                thread.join()
+                threads.remove(thread)
     progress_bar.close()
-    conn.commit()
-    conn.close()
+    for thread in threads:
+        thread.join()
 
 
 def initialize_threads(pk_dict: dict[str: list[int]]):
@@ -322,7 +216,7 @@ def initialize_threads(pk_dict: dict[str: list[int]]):
         thread2.start()
         retrieve_threads.append(thread2)
 
-    insert_thread = threading.Thread(target=insert_queue_data, args=(total,))
+    insert_thread = threading.Thread(target=process_batches, args=(total,))
     insert_thread.start()
 
     for thread in retrieve_threads:
@@ -345,7 +239,7 @@ def write_to_sheet(df: pd.DataFrame, key: str, sheet: str = 'Sheet1'):
 
 def add_to_google():
     if dt.date.today() < dt.date(2024, 4, 1):
-        pre_batt, pre_pitch = get_initial_data(('2024-01-01', '2024-03-27'))
+        pre_batt, pre_pitch = get_initial_data('S')
         df1 = pd.DataFrame.from_records(pre_batt)
         df2 = pd.DataFrame.from_records(pre_pitch)
         batt_spr_train = '1sa_hUSrkka1K8WbNJ23HVtLoYDCzNT3HRQXfHsbjbR4'
@@ -354,7 +248,7 @@ def add_to_google():
         write_to_sheet(df1, batt_spr_train)
         write_to_sheet(df2, pitch_spr_train)
 
-    batt, pitch = get_initial_data(('2024-03-28', '2024-12-31'))
+    batt, pitch = get_initial_data('R')
     if len(batt) != 0 or len(pitch) != 0:
         df3 = pd.DataFrame.from_records(batt)
         df4 = pd.DataFrame.from_records(pitch)
@@ -408,6 +302,10 @@ def daily_update(start_date=None, google=True):
 # date format is 2023-08-04
 if __name__ == '__main__':
     # create_all_plays_table()
+    create_table('all_plays', db_keys)
+    create_table('hitters', hitter_db_keys)
+    create_table('pitchers', pitcher_db_keys)
+    create_table('fielders', fielder_db_keys)
     try:
         os.chdir(os.path.dirname(__file__))
         if len(sys.argv) == 2:

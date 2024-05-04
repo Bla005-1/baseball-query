@@ -1,5 +1,10 @@
 import sqlite3
+import re
 from typing import List, Iterable, Any
+
+
+def camel_to_snake(camel_case):
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', camel_case).lower()
 
 
 def nested_list(rows: List[dict]):
@@ -35,7 +40,7 @@ def dict_factory(cursor, row):
 
 
 def connect():
-    conn = sqlite3.connect('baseball_plays.db')
+    conn = sqlite3.connect('baseball_plays.db', timeout=20)
     cursor = conn.cursor()
     return conn, cursor
 
