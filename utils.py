@@ -40,7 +40,7 @@ def dict_factory(cursor, row):
 
 
 def connect():
-    conn = sqlite3.connect('baseball_plays.db', timeout=20)
+    conn = sqlite3.connect('baseball_plays.db', timeout=25)
     cursor = conn.cursor()
     return conn, cursor
 

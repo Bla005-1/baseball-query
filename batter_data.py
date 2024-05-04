@@ -44,11 +44,9 @@ def process_batter_rows(batter_data: typing.List[typing.Dict]):
         batter_row = add_percentile(batter_row)
         descriptions = batter_row.get('pitch_results', '').split(',')
         zones = batter_row.get('zones', '').split(',')
-        contact_percent, zone_contact, chase_percent = calculate_contacts(descriptions, zones)
+        percents = calculate_contacts(descriptions, zones)
         batter_row['bb'] = len([x for x in hit_speeds if x is not None])
-        batter_row['contact_percent'] = contact_percent
-        batter_row['zone_contact'] = zone_contact
-        batter_row['chase'] = chase_percent
+        batter_row.update(percents)
         batter_row.pop('zones')
         batter_row.pop('pitch_results')
         processed_data.append(batter_row)
@@ -82,7 +80,6 @@ def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> t
         batt_query += ' AND league = ?'
         args.append(league)
     data = select_data(batt_query, args)[0]
-    print(data)
     games = data['games']
     if games is None:
         return None

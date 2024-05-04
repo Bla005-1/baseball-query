@@ -10,7 +10,6 @@ import traceback
 import logging
 from tqdm import tqdm
 from https import get_plays, get_pks_over_time
-from era_manager import insert_era_plays, find_era_plays
 from queue import Queue
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
@@ -182,7 +181,7 @@ def process_batches(total: int):
             pitcher_batch.extend(players['pitchers'])
             fielder_batch.extend(players['fielders'])
             data_queue.task_done()
-        debug.increment('DB', 'counted_games', len(play_batch))
+            debug.increment('DB', 'counted_games')
 
         tables = [
             ('all_plays', play_batch, db_keys),
@@ -279,11 +278,6 @@ def daily_update(start_date=None, google=True):
     print(f'Using {start_date} as the beginning of new requests')
     the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)
     initialize_threads(the_pk_dict)
-    try:
-        insert_era_plays(find_era_plays(str(start_date), str(dt.date.today())))
-    except Exception:
-        log.error('An error occurred:', exc_info=True)
-        traceback.print_exc()
     print(debug)
     if google:
         try:

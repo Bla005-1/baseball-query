@@ -28,7 +28,9 @@ def calculate_contacts(pitch_results: List[str], zones: List[str]) -> Tuple[floa
     contact_percent = contact / total_swings if total_swings else 0
     zone_contact = in_zone_contact / in_zone if in_zone else 0
     chase_percent = chase / out_of_zone if out_of_zone else 0
-    return contact_percent, zone_contact, chase_percent
+    return {'contact_percent': contact_percent,
+            'zone_contact': zone_contact,
+            'chase_percent': chase_percent}
 
 
 def add_percentile(row: Union[List, Dict]) -> Union[List, Dict]:
