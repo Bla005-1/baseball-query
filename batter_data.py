@@ -1,10 +1,10 @@
-import time
-import typing
+
+from typing import *
 from utils import connect, select_data
 from common_data import add_percentile, calculate_contacts
 
 
-def get_batter_data(name: str, league: str, dates: typing.Tuple[str, str]) -> typing.Dict:
+def get_batter_data(name: str, league: str, dates: Tuple[str, str]) -> Dict:
     args = [dates[0], dates[1], name]
     batt_query = '''
         SELECT
@@ -34,13 +34,13 @@ def get_batter_data(name: str, league: str, dates: typing.Tuple[str, str]) -> ty
     return processed_rows
 
 
-def process_batter_rows(batter_data: typing.List[typing.Dict]):
+def process_batter_rows(batter_data: List[Dict]):
     processed_data = []
     for batter_row in batter_data:
-        hit_speeds = batter_row.get('percentile_90', '')
+        hit_speeds = batter_row.get('percentile_90', '')  # don't let the dict key name confuse you
         if hit_speeds is None:
             hit_speeds = ''
-        hit_speeds = hit_speeds.split(',')  # don't let the dict key name confuse you
+        hit_speeds = hit_speeds.split(',')
         batter_row = add_percentile(batter_row)
         descriptions = batter_row.get('pitch_results', '').split(',')
         zones = batter_row.get('zones', '')
@@ -49,7 +49,7 @@ def process_batter_rows(batter_data: typing.List[typing.Dict]):
         else:
             zones = zones.split(',')
         percents = calculate_contacts(descriptions, zones)
-        batter_row['bb'] = len([x for x in hit_speeds if x is not None])
+        # batter_row['bip'] = len([x for x in hit_speeds if x is not None])
         batter_row.update({k: v * 100 for k, v in percents.items()})
         batter_row.pop('zones')
         batter_row.pop('pitch_results')
@@ -57,33 +57,59 @@ def process_batter_rows(batter_data: typing.List[typing.Dict]):
     return processed_data
 
 
-def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> typing.Dict:
-    start_time = time.time()
-    args = [dates[0], dates[1], name]
+def basic_batt_calcs(name: Union[str, List[str]], league: str, dates: Tuple[str, str] = None,
+                     game_type: str = None) -> List[Dict]:
     batt_query = '''
-        SELECT 
-            SUM(runs) AS runs,
-            SUM(doubles) AS doubles,
-            SUM(triples) AS triples,
-            SUM(home_runs) AS home_runs,
-            SUM(strike_outs) AS strike_outs,
-            SUM(base_on_balls) AS base_on_balls,
-            SUM(hits) AS hits,
-            SUM(at_bats) AS at_bats,
-            SUM(stolen_bases) AS stolen_bases,
-            SUM(plate_appearances) AS plate_appearances,
-            SUM(total_bases) AS total_bases,
-            SUM(rbi) AS rbi,
-            SUM(sac_flies) AS sac_flies,
-            SUM(hit_by_pitch) AS hit_by_pitch,
-            SUM(games_played) AS games
-        FROM hitters
-        WHERE date BETWEEN ? AND ? AND name = ?
-    '''
+            SELECT 
+                name,
+                league,
+                SUM(runs) AS runs,
+                SUM(doubles) AS doubles,
+                SUM(triples) AS triples,
+                SUM(home_runs) AS home_runs,
+                SUM(strike_outs) AS strike_outs,
+                SUM(base_on_balls) AS base_on_balls,
+                SUM(hits) AS hits,
+                SUM(at_bats) AS at_bats,
+                SUM(stolen_bases) AS stolen_bases,
+                SUM(plate_appearances) AS plate_appearances,
+                SUM(total_bases) AS total_bases,
+                SUM(rbi) AS rbi,
+                SUM(sac_flies) AS sac_flies,
+                SUM(hit_by_pitch) AS hit_by_pitch,
+                SUM(games_played) AS games
+            FROM hitters
+        '''
+    where = []
+    args = []
+    if name:
+        if isinstance(name, str) or (isinstance(name, list) and len(name) == 1):
+            where.append('name = ?')
+            args.append(name if isinstance(name, str) else name[0])
+        else:
+            name = [f'"{x}"' for x in name]
+            where.append(f'name IN ({", ".join(name)})')
     if league:
-        batt_query += ' AND league = ?'
+        where.append('league = ?')
         args.append(league)
-    data = select_data(batt_query, args)[0]
+    if dates:
+        where.append('date BETWEEN ? AND ?')
+        args.extend([dates[0], dates[1]])
+    if game_type:
+        where.append('game_type = ?')
+        args.append(game_type)
+    if len(where) == 1:
+        batt_query += 'WHERE ' + where[0]
+    elif len(where) > 1:
+        batt_query += 'WHERE ' + ' AND '.join(where)
+    if name is None or isinstance(name, list):
+        batt_query += ' GROUP BY name'
+    all_data = select_data(batt_query, args)
+    finished_results = [perform_calcs(x) for x in all_data if x['games'] is not None]
+    return finished_results
+
+
+def perform_calcs(data):
     games = data['games']
     if games is None:
         return None
@@ -98,15 +124,20 @@ def basic_batt_calcs(name: str, league: str, dates: typing.Tuple[str, str]) -> t
     hit_by_pitch = data['hit_by_pitch']
     hits = data['hits']
     singles = hits - hr - triples - doubles
-    obp = (hits + walks + hit_by_pitch) / (ab + hit_by_pitch + walks + sac_f)
-    slg = (singles + doubles*2 + triples*3 + hr*4) / ab
-    ba = hits / ab
-    strikeout_percent = strikeout / pa * 100
-    walk_percent = walks / pa * 100
-    print('basic_batt_calcs: ', time.time() - start_time)
-    return {'PA': pa, 'AB': ab, 'BA': '{:.4f}'.format(ba), 'OBP': '{:.4f}'.format(obp), 'SLG': '{:.4f}'.format(slg),
-            'HR': hr, 'R': data['runs'], 'RBI': data['rbi'], 'SB': data['stolen_bases'],
-            'K%': '{:.2f}'.format(strikeout_percent), 'BB%': '{:.2f}'.format(walk_percent), 'singles': singles,
+    if ab != 0:
+        obp = (hits + walks + hit_by_pitch) / (ab + hit_by_pitch + walks + sac_f)
+        slg = (singles + doubles * 2 + triples * 3 + hr * 4) / ab
+        ba = hits / ab
+    else:
+        obp = slg = ba = 0
+    if pa != 0:
+        strikeout_percent = strikeout / pa * 100
+        walk_percent = walks / pa * 100
+    else:
+        strikeout_percent = walk_percent = 0
+    return {'name': data['name'], 'PA': pa, 'AB': ab, 'BA': round(ba, 4), 'OBP': round(obp, 4),
+            'SLG': round(slg, 4), 'HR': hr, 'R': data['runs'], 'RBI': data['rbi'], 'SB': data['stolen_bases'],
+            'K%': round(strikeout_percent, 2), 'BB%': round(walk_percent, 2), 'singles': singles,
             'doubles': doubles, 'triples': triples, 'H': hits, 'BB': walks, 'G': games,
             'SO': strikeout, 'bases': data['total_bases']}
 
@@ -125,7 +156,7 @@ def build_calcs_query(leagues: list[str], total=False):
             OR ab_result LIKE '%Swinging%' THEN 1 ELSE 0 END) * 100.0 AS contact_percent,
             GROUP_CONCAT(IFNULL(launch_speed, 'None'), ',') AS percentile_90
         FROM all_plays
-        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?']*len(leagues)))} 
+        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?'] * len(leagues)))} 
         AND pitch_name IS NOT NULL
         {'GROUP BY pitch_name' if not total else ''}
     '''
@@ -143,7 +174,7 @@ def build_range_query(leagues: list[str], total=False):
             100 AS a,
             40 AS b
         FROM all_plays
-        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?']*len(leagues)))} 
+        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?'] * len(leagues)))} 
         AND pitch_name IS NOT NULL
         {'GROUP BY pitch_name' if not total else ''}
     '''
@@ -178,4 +209,7 @@ def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tup
 
 
 if __name__ == '__main__':
-    print(basic_batt_calcs('Freddie Freeman', 'MLB', ('2023-03-27', '2024-05-03')))
+    r = basic_batt_calcs(None, 'MLB', game_type='R')
+    for calc in r:
+        if calc['OBP'] > .4 and calc['PA'] > 30:
+            print(calc)

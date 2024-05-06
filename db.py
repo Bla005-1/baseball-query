@@ -44,7 +44,7 @@ def create_table(table: str, key_relation: dict):
     conn, cursor = connect()
     cursor.execute(table_query)
     conn.commit()
-    index_query = f'CREATE INDEX IF NOT EXISTS idx_blank ON {table} (blank);'
+    index_query = f'CREATE INDEX IF NOT EXISTS idx_{table}_blank ON {table} (blank);'
     for idx in indexes:
         cursor.execute(index_query.replace('blank', idx))
     conn.commit()
@@ -52,13 +52,15 @@ def create_table(table: str, key_relation: dict):
 
 
 # p.hit_speed IS NOT NULL AND
-def get_initial_data(game_type: str) -> tuple[list, list]:
+def get_initial_data(game_type: str) -> tuple[list, list, list]:
     batt_query = '''
         SELECT 
             batter_name,
             league,
+            COUNT(*) AS pitches,
             GROUP_CONCAT(zone) as zones,
             GROUP_CONCAT(pitch_result) as pitch_results,
+            SUM(CASE WHEN pitch_result LIKE "%play%" THEN 1 ELSE 0 END) AS bip,
             GROUP_CONCAT(launch_speed) as percentile_90,
             AVG(CAST(launch_speed AS REAL)) AS ev,
             MAX(CAST(launch_speed AS REAL)) AS max_ev,
@@ -93,6 +95,7 @@ def get_initial_data(game_type: str) -> tuple[list, list]:
     pitch_query3 = '''
         SELECT league,
             name,
+            SUM(batters_faced) AS batters_faced,
             SUM(pitches_thrown) AS pitches_thrown,
             SUM(strike_outs) AS strike_outs,
             SUM(base_on_balls) AS walks,
@@ -110,11 +113,10 @@ def get_initial_data(game_type: str) -> tuple[list, list]:
         a.update(calculate_percents(p.get('pitch_results', '').split(',')))
     for mp in more_overall_pitchers:
         a = combined_overall.setdefault(mp['league'] + mp['name'], {})
-        mp.pop('name')
         a.update(mp)
     batter_rows = process_batter_rows(batter_data)
-    pitcher_rows = process_pitch_rows(pitch_data, combined_overall)
-    return batter_rows, pitcher_rows
+    pitcher_rows = process_pitch_rows(pitch_data)
+    return batter_rows, pitcher_rows, list(combined_overall.values())
 
 
 def retrieve_data(pk_dict: dict):
@@ -240,26 +242,18 @@ def write_to_sheet(df: pd.DataFrame, key: str, sheet: str = 'Sheet1'):
 
 
 def add_to_google():
-    if dt.date.today() < dt.date(2024, 4, 1):
-        pre_batt, pre_pitch = get_initial_data('S')
-        df1 = pd.DataFrame.from_records(pre_batt)
-        df2 = pd.DataFrame.from_records(pre_pitch)
-        batt_spr_train = '1sa_hUSrkka1K8WbNJ23HVtLoYDCzNT3HRQXfHsbjbR4'
-        pitch_spr_train = '11LdxxpWHjnWZinEn-4jSSnx0hYrmNK5jeQem1dq_Qlo'
-        print('adding spring training to drive')
-        write_to_sheet(df1, batt_spr_train)
-        write_to_sheet(df2, pitch_spr_train)
-
-    batt, pitch = get_initial_data('R')
+    batt, pitch, pitch_overall = get_initial_data('R')
     if len(batt) != 0 or len(pitch) != 0:
-        df3 = pd.DataFrame.from_records(batt)
-        df4 = pd.DataFrame.from_records(pitch)
+        df1 = pd.DataFrame.from_records(batt)
+        df2 = pd.DataFrame.from_records(pitch)
+        df3 = pd.DataFrame.from_records(pitch_overall)
         print('adding regular to drive')
         batt_regular = '1dyrqFVcnK9034WZHwKmPCLgopqhgeucvwjSD38pTE2Q'
         pitch_regular = '1BdpuSnjGqYZp6RypI-z2NSST1REJsusM42dSkOk-bxc'
-        write_to_sheet(df3, batt_regular)
-        write_to_sheet(df4, pitch_regular)
-
+        pitch_overall_regular = '1G6fGNiRaxfjBrwHXQU9JEU8awjQYPZHoq_xFc0_574M'
+        write_to_sheet(df1, batt_regular)
+        write_to_sheet(df2, pitch_regular)
+        write_to_sheet(df3, pitch_overall_regular)
     write_last_update()
 
 
@@ -276,7 +270,7 @@ def daily_update(start_date=None, google=True):
                 start_date = dt.datetime.strptime(date_str, "%Y-%m-%d").date()
         except FileNotFoundError:
             start_date = dt.date.today() - dt.timedelta(days=1)
-
+    # start_date = start_date - dt.timedelta(days=1)
     log.info(f'Using {start_date} as the beginning of new requests')
     print(f'Using {start_date} as the beginning of new requests')
     the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)
@@ -305,15 +299,16 @@ if __name__ == '__main__':
     create_table('fielders', fielder_db_keys)
     try:
         os.chdir(os.path.dirname(__file__))
+        google = True
         if len(sys.argv) == 2:
             try:
                 s_d = dt.datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
-                daily_update(start_date=s_d, google=False)
+                daily_update(start_date=s_d, google=google)
             except ValueError:
                 print('Format using YYYY-MM-DD')
                 exit(1)
         else:
-            daily_update(google=True)
+            daily_update(google=google)
     except Exception:
         log.error('An error occurred:', exc_info=True)
         exit(1)
