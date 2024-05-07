@@ -58,11 +58,11 @@ def get_initial_data(game_type: str) -> tuple[list, list, list]:
             batter_name,
             league,
             COUNT(*) AS pitches,
-            GROUP_CONCAT(zone) as zones,
+            GROUP_CONCAT(IFNULL(zone, 0)) as zones,
             GROUP_CONCAT(pitch_result) as pitch_results,
             SUM(CASE WHEN pitch_result LIKE "%play%" THEN 1 ELSE 0 END) AS bip,
             GROUP_CONCAT(launch_speed) as percentile_90,
-            AVG(CAST(launch_speed AS REAL)) AS ev,
+            AVG(CAST(launch_speed AS REAL)) AS avg_ev,
             MAX(CAST(launch_speed AS REAL)) AS max_ev,
             AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
         FROM all_plays
