@@ -17,22 +17,23 @@ def calculate_contacts(pitch_results: List[str], zones: List[str]) -> Dict:
     contact = 0
     total_swings = 0
     for i, d in enumerate(pitch_results):
+        if 0 < zones[i] < 9:
+            in_zone += 1  # counts all in zone pitches
+        elif zones[i] > 9:
+            out_of_zone += 1  # counts all out of zone pitches
         if d in all_swings or 'play' in d:
             total_swings += 1
-            if 0 < zones[i] > 9:
+            if 0 < zones[i] < 9:
                 in_zone_swing += 1
-            else:
-                chase += 1
-        if zones[i] > 9:
-            out_of_zone += 1
-        elif 0 < zones[i] < 9:
-            in_zone += 1
+            elif zones[i] > 9:
+                chase += 1  # counts out of zone swings
         if 'play' in d or d == 'Foul' or d == 'Foul Bunt':
             contact += 1
-            if 0 < zones[i] > 9:
+            if 0 < zones[i] < 9:
                 in_zone_contact += 1
+
     contact_percent = contact / total_swings if total_swings else 0
-    zone_contact = in_zone_contact / in_zone if in_zone else 0
+    zone_contact = in_zone_contact / in_zone_swing if in_zone_swing else 0
     chase_percent = chase / out_of_zone if out_of_zone else 0
     swing_percent = total_swings / len(pitch_results) if len(pitch_results) else 0
     zone_swing_percent = in_zone_swing / in_zone if in_zone else 0
