@@ -1,10 +1,10 @@
 import math
-import typing
-from utils import connect, select_data
+from typing import *
+from utils import select_data
 from common_data import calculate_percents
 
 
-def process_pitch_rows(pitch_data: typing.List[typing.Dict]):
+def process_pitch_rows(pitch_data: List[Dict]) -> List[Dict]:
     processed_data = []
     for pitch_row in pitch_data:
         my_data = {}
@@ -19,7 +19,7 @@ def process_pitch_rows(pitch_data: typing.List[typing.Dict]):
     return processed_data
 
 
-def basic_pitch_calcs(name: str, league: str = None, dates: tuple[str, str] = None, game_type: str = None):
+def basic_pitch_calcs(name: str, league: str = None, dates: Tuple[str, str] = None, game_type: str = None):
     args = [name]
     query = '''
         SELECT SUM(innings_pitched) AS IP,
@@ -72,76 +72,6 @@ def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
     args.extend(args)
     rows = select_data(pitch_query + '\nUNION ALL\n' + total_query, args)
     return rows
-
-
-def build_calcs_query(leagues: list[str], total=False):
-    return f'''
-        SELECT
-            {"'Total' AS pitch_name" if total else 'pitch_name'},
-            COUNT(*) AS total_pitches,
-            AVG(start_speed) AS avg_start_speed,
-            MAX(start_speed) AS max_start_speed,
-            AVG(spin_rate) AS avg_spin_rate,
-            AVG(breakZ) AS avg_breakZ,
-            AVG(breakX) AS avg_breakX,
-            SUM(CASE WHEN LOWER(ab_result) LIKE '%strike%' OR LOWER(ab_result) LIKE '%foul tip%' OR 
-             LOWER(ab_result) LIKE '%swinging pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
-            SUM(CASE WHEN LOWER(ab_result) LIKE '%swinging%' OR LOWER(ab_result) 
-             LIKE '%foul tip%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS swinging_strike_percentage,
-            SUM(CASE WHEN LOWER(ab_result) LIKE '%ball%' OR LOWER(ab_result) LIKE '%hit by%' OR LOWER(ab_result) 
-             LIKE '%pitchout%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS ball_percentage
-        FROM all_plays
-        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?']*len(leagues)))} 
-        AND pitch_name IS NOT NULL
-        {'GROUP BY pitch_name' if not total else ''}
-    '''
-
-
-def build_range_query(leagues: list[str], total=False):
-    return f'''
-        SELECT
-            {"'Total' AS pitch_name" if total else 'pitch_name'},
-            COUNT(*) AS total_pitches,
-            MAX(start_speed) - MIN(start_speed) AS start_speed_range,
-            (MAX(start_speed) - MIN(start_speed)) * 2 AS max_speed_difference,
-            MAX(spin_rate) - MIN(spin_rate) AS spin_rate_range,
-            MAX(breakZ) - MIN(breakZ) AS breakZ_range,
-            MAX(breakX) - MIN(breakX) AS breakX_range,
-            100 AS a,
-            100 AS b,
-            100 AS c
-        FROM all_plays
-        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?']*len(leagues)))} 
-        AND pitch_name IS NOT NULL
-        {'GROUP BY pitch_name' if not total else ''}
-    '''
-
-
-def pitch_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tuple], dict[str: tuple]]:
-    args = [dates[0], dates[1]]
-    args.extend(leagues)
-    conn, cursor = connect()
-
-    cursor.execute(build_calcs_query(leagues), args)
-    pitch_calcs_rows = cursor.fetchall()
-
-    cursor.execute(build_range_query(leagues), args)
-    pitch_range_rows = cursor.fetchall()
-
-    cursor.execute(build_calcs_query(leagues, True), args)
-    total_avg = cursor.fetchone()
-    averages = {'Total': total_avg}
-
-    cursor.execute(build_range_query(leagues, True), args)
-    total_range = cursor.fetchone()
-    ranges = {'Total': total_range}
-
-    conn.close()
-
-    averages.update({row[0]: tuple(row) for row in pitch_calcs_rows if row[0] is not None})
-    ranges.update({row[0]: tuple(row) for row in pitch_range_rows if row[0] is not None})
-
-    return averages, ranges
 
 
 def calc_release_pos(data) -> tuple[float, float]:

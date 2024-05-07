@@ -1,6 +1,5 @@
-
 from typing import *
-from utils import connect, select_data
+from utils import select_data
 from common_data import add_percentile, calculate_contacts
 
 
@@ -34,13 +33,9 @@ def get_batter_data(name: str, league: str, dates: Tuple[str, str]) -> Dict:
     return processed_rows
 
 
-def process_batter_rows(batter_data: List[Dict]):
+def process_batter_rows(batter_data: List[Dict]) -> List[Dict]:
     processed_data = []
     for batter_row in batter_data:
-        hit_speeds = batter_row.get('percentile_90', '')  # don't let the dict key name confuse you
-        if hit_speeds is None:
-            hit_speeds = ''
-        hit_speeds = hit_speeds.split(',')
         batter_row = add_percentile(batter_row)
         descriptions = batter_row.get('pitch_results', '').split(',')
         zones = batter_row.get('zones', '')
@@ -49,7 +44,6 @@ def process_batter_rows(batter_data: List[Dict]):
         else:
             zones = zones.split(',')
         percents = calculate_contacts(descriptions, zones)
-        # batter_row['bip'] = len([x for x in hit_speeds if x is not None])
         batter_row.update({k: v * 100 for k, v in percents.items()})
         batter_row.pop('zones')
         batter_row.pop('pitch_results')
@@ -140,72 +134,6 @@ def perform_calcs(data):
             'K%': round(strikeout_percent, 2), 'BB%': round(walk_percent, 2), 'singles': singles,
             'doubles': doubles, 'triples': triples, 'H': hits, 'BB': walks, 'G': games,
             'SO': strikeout, 'bases': data['total_bases']}
-
-
-def build_calcs_query(leagues: list[str], total=False):
-    return f'''
-        SELECT
-            {"'Total' AS pitch_name" if total else 'pitch_name'},
-            COUNT(*) AS seen,
-            SUM(CASE WHEN LOWER(ab_result) LIKE '%foul%' OR LOWER(ab_result) LIKE '%play%' THEN 1 ELSE 0 END) AS bb,
-            AVG(CAST(launch_speed AS REAL)) AS avg_velo,
-            MAX(CAST(launch_speed AS REAL)) AS max_velo,
-            AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle,
-            CAST(SUM(CASE WHEN ab_result LIKE '%In play%' OR ab_result = 'Foul'
-            THEN 1 ELSE 0 END) AS REAL) / SUM(CASE WHEN ab_result LIKE '%In play%' OR ab_result LIKE '%Foul%' 
-            OR ab_result LIKE '%Swinging%' THEN 1 ELSE 0 END) * 100.0 AS contact_percent,
-            GROUP_CONCAT(IFNULL(launch_speed, 'None'), ',') AS percentile_90
-        FROM all_plays
-        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?'] * len(leagues)))} 
-        AND pitch_name IS NOT NULL
-        {'GROUP BY pitch_name' if not total else ''}
-    '''
-
-
-def build_range_query(leagues: list[str], total=False):
-    return f'''
-        SELECT
-            {"'Total' AS pitch_name" if total else 'pitch_name'},
-            COUNT(*) AS seen,
-            0,
-            MAX(CAST(launch_speed AS REAL)) - MIN(CAST(launch_speed AS REAL)) AS hit_speed_diff,
-            (MAX(CAST(launch_speed AS REAL)) - MIN(CAST(launch_speed AS REAL))) * 2 AS max_hit_speed_diff,
-            MAX(CAST(launch_angle AS REAL)) - MIN(CAST(launch_angle AS REAL)) AS launch_angle_diff,
-            100 AS a,
-            40 AS b
-        FROM all_plays
-        WHERE date BETWEEN ? AND ? {'AND league IN ({})'.format(', '.join(['?'] * len(leagues)))} 
-        AND pitch_name IS NOT NULL
-        {'GROUP BY pitch_name' if not total else ''}
-    '''
-
-
-def batt_league_average(leagues: list[str], dates: tuple) -> tuple[dict[str: tuple], dict[str: tuple]]:
-    args = [dates[0], dates[1]]
-    args.extend(leagues)
-    conn, cursor = connect()
-
-    cursor.execute(build_calcs_query(leagues), args)
-    batt_calcs_rows = cursor.fetchall()
-    batt_calcs_rows = [add_percentile(r) for r in batt_calcs_rows]
-
-    cursor.execute(build_range_query(leagues), args)
-    batt_range_rows = cursor.fetchall()
-
-    cursor.execute(build_calcs_query(leagues, True), args)
-    total_avg = cursor.fetchone()
-    total_avg = add_percentile(total_avg)
-    averages = {'Total': tuple(total_avg)}
-
-    cursor.execute(build_range_query(leagues, True), args)
-    total_range = cursor.fetchone()
-    ranges = {'Total': total_range}
-
-    conn.close()
-
-    averages.update({row[0]: tuple(row) for row in batt_calcs_rows if row[0] is not None})
-    ranges.update({row[0]: tuple(row) for row in batt_range_rows if row[0] is not None})
-    return averages, ranges
 
 
 if __name__ == '__main__':
