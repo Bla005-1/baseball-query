@@ -15,7 +15,7 @@ from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
 from utils import DebugManager, connect, select_data
 from batter_data import process_batter_rows
-from pitch_data import process_pitch_rows
+from pitch_data import process_pitch_rows, get_overall_stats
 from static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys
 from common_data import calculate_percents
 
@@ -103,20 +103,12 @@ def get_initial_data(game_type: str) -> tuple[list, list, list]:
         FROM pitchers WHERE game_type = ?
         GROUP BY league, name
         '''
-    batter_data = select_data(batt_query, game_type)
-    pitch_data = select_data(pitch_query, game_type)
-    overall_pitchers = select_data(pitch_query2, game_type)
-    more_overall_pitchers = select_data(pitch_query3, game_type)
-    combined_overall = {}
-    for p in overall_pitchers:
-        a = combined_overall.setdefault(p['league'] + p['pitcher_name'], {})
-        a.update(calculate_percents(p.get('pitch_results', '').split(',')))
-    for mp in more_overall_pitchers:
-        a = combined_overall.setdefault(mp['league'] + mp['name'], {})
-        a.update(mp)
+    batter_data = select_data(batt_query, [game_type])
+    pitch_data = select_data(pitch_query, [game_type])
+    combined_overall = get_overall_stats(pitch_query2, pitch_query3, [game_type])
     batter_rows = process_batter_rows(batter_data)
     pitcher_rows = process_pitch_rows(pitch_data)
-    return batter_rows, pitcher_rows, list(combined_overall.values())
+    return batter_rows, pitcher_rows, combined_overall
 
 
 def retrieve_data(pk_dict: dict):
@@ -209,7 +201,6 @@ def process_batches(total: int):
 
 
 def initialize_threads(pk_dict: dict[str: list[int]]):
-    print('init threads')
     total = sum(len(lst) for lst in pk_dict.values())
     retrieve_threads = []
     for d, v in pk_dict.items():
@@ -220,8 +211,6 @@ def initialize_threads(pk_dict: dict[str: list[int]]):
         retrieve_threads.append(thread1)
         thread2.start()
         retrieve_threads.append(thread2)
-        print(f'created thread for {d}')
-    print('created get threads')
     insert_thread = threading.Thread(target=process_batches, args=(total,))
     insert_thread.start()
 

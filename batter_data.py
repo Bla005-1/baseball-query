@@ -1,56 +1,6 @@
 from typing import *
-from utils import select_data
+from utils import select_data, QueryBuilder
 from common_data import add_percentile, calculate_contacts
-
-
-class QueryBuilder:
-    def __init__(self, base_query):
-        self.base_query = base_query
-        self.args = []
-        self.where = []
-        self.name = None
-
-    def add_name(self, name, column: str = 'name'):
-        self.name = name
-        if name:
-            if isinstance(name, str) or (isinstance(name, list) and len(name) == 1):
-                self.where.append(f'{column} = ?')
-                self.args.append(name if isinstance(name, str) else name[0])
-            else:
-                name = [f'"{x}"' for x in name]
-                self.where.append(f'{column} IN ({", ".join(name)})')
-
-    def add_league(self, league):
-        if league:
-            self.where.append('league = ?')
-            self.args.append(league)
-
-    def add_dates(self, dates):
-        if dates:
-            self.where.append('date BETWEEN ? AND ?')
-            self.args.extend([dates[0], dates[1]])
-
-    def add_game_type(self, game_type):
-        if game_type:
-            self.where.append('game_type = ?')
-            self.args.append(game_type)
-
-    def finish_query(self):
-        if len(self.where) == 1:
-            self.base_query += 'WHERE ' + self.where[0]
-        elif len(self.where) > 1:
-            self.base_query += 'WHERE ' + ' AND '.join(self.where)
-        if self.name is None or isinstance(self.name, list):
-            self.base_query += ' GROUP BY name'
-
-    def get_query(self):
-        return self.base_query
-
-    def get_args(self):
-        return self.args
-
-    def __str__(self):
-        return self.base_query
 
 
 def get_batter_data(name: Union[str, List[str]], league: str = None, dates: Tuple[str, str] = None,

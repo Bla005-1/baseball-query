@@ -1,7 +1,20 @@
 import math
 from typing import *
-from utils import select_data
+from utils import select_data, QueryBuilder
 from common_data import calculate_percents
+
+
+def get_overall_stats(query1, query2, args):
+    overall_pitchers = select_data(query1, args)
+    more_overall_pitchers = select_data(query2, args)
+    combined_overall = {}
+    for p in overall_pitchers:
+        a = combined_overall.setdefault(p['league'] + p['pitcher_name'], {})
+        a.update(calculate_percents(p.get('pitch_results', '').split(',')))
+    for mp in more_overall_pitchers:
+        a = combined_overall.setdefault(mp['league'] + mp['name'], {})
+        a.update(mp)
+    return list(combined_overall.values())
 
 
 def process_pitch_rows(pitch_data: List[Dict]) -> List[Dict]:
@@ -19,8 +32,8 @@ def process_pitch_rows(pitch_data: List[Dict]) -> List[Dict]:
     return processed_data
 
 
-def basic_pitch_calcs(name: str, league: str = None, dates: Tuple[str, str] = None, game_type: str = None):
-    args = [name]
+def basic_pitch_calcs(name: Union[str, List[str]], league: str = None, dates: Tuple[str, str] = None,
+                      game_type: str = None) -> Union[List[Dict], Dict]:
     query = '''
         SELECT SUM(innings_pitched) AS IP,
             9 * SUM(earned_runs) / SUM(innings_pitched) AS ERA,
@@ -28,50 +41,53 @@ def basic_pitch_calcs(name: str, league: str = None, dates: Tuple[str, str] = No
             SUM(base_on_balls) / SUM(CAST(batters_faced AS REAL)) AS walk_ratio
         FROM pitchers WHERE name = ?
     '''
-    if league:
-        query += ' AND league = ?'
-        args.append(league)
-    if dates:
-        query += ' AND date BETWEEN ? AND ?'
-        args.extend([dates[0], dates[1]])
-    if game_type:
-        query += ' AND game_type = ?'
-        args.append(game_type)
-    calcs = select_data(query, args)[0]
-    return {k: round(v, 3) for k, v in calcs.items()}
+    builder = QueryBuilder(query)
+    builder.add_name(name, 'name')
+    builder.add_league(league)
+    builder.add_dates(dates)
+    builder.add_game_type(game_type)
+    builder.finish_query()
+    calcs = select_data(builder.get_query(), builder.get_args())
+    for i, c in enumerate(calcs):
+        calcs[i] = {k: round(v, 3) for k, v in c.items()}
+    if len(calcs) == 1:
+        return calcs[0]
+    return calcs
 
 
 # could make get_data a common function between pitch and batt since only query is different
-def get_pitcher_data(name: str, league: str, dates: tuple[str, str]) -> dict:
-    args = [dates[0], dates[1], name]
-    pitch_query = '''
-        SELECT
-            pitch_name,
-            COUNT(*) AS total_pitches,
-            AVG(start_speed) AS avg_start_speed,
-            MAX(start_speed) AS max_start_speed,
-            AVG(spin_rate) AS avg_spin_rate,
-            AVG(breakZ) AS avg_breakZ,
-            AVG(breakX) AS avg_breakX,
-            SUM(CASE WHEN ab_result LIKE '%Strike%' OR ab_result LIKE '%Foul Tip%' OR 
-             ab_result LIKE '%Swinging Pitchout%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS strike_percentage,
-            SUM(CASE WHEN LOWER(ab_result) LIKE '%swinging%' OR ab_result
-             LIKE '%Foul Tip%' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS swinging_strike_percentage,
-            SUM(CASE WHEN LOWER(ab_result) LIKE '%ball%' OR LOWER(ab_result) LIKE '%hit by%' OR LOWER(ab_result) 
-             LIKE '%pitchout%' THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS ball_percentage
-        FROM all_plays
-        WHERE date BETWEEN ? AND ? AND pitcher_name = ?
-        AND pitch_name IS NOT NULL
-        '''
-    if league:
-        pitch_query += ' AND league = ?'
-        args.append(league)
-
-    total_query = pitch_query.replace('pitch_name,', '"Total" AS pitch_name,')
-    pitch_query += 'GROUP BY pitch_name'
-    args.extend(args)
-    rows = select_data(pitch_query + '\nUNION ALL\n' + total_query, args)
-    return rows
+def get_pitcher_data(name: Union[str, List[str]], league: str = None, dates: Tuple[str, str] = None,
+                     game_type: str = None) -> Union[List[Dict], Dict]:
+    pitch_query1 = '''
+            SELECT league, 
+                pitcher_name,
+                COUNT(*) AS count,
+                GROUP_CONCAT(pitch_result) AS pitch_results
+            FROM all_plays
+            '''
+    pitch_query2 = '''
+            SELECT league,
+                name,
+                SUM(batters_faced) AS batters_faced,
+                SUM(pitches_thrown) AS pitches_thrown,
+                SUM(strike_outs) AS strike_outs,
+                SUM(base_on_balls) AS walks,
+                SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k_bb
+            FROM pitchers
+            '''
+    builder1 = QueryBuilder(pitch_query1)
+    builder2 = QueryBuilder(pitch_query2)
+    builder1.add_name(name, 'pitcher_name')
+    builder2.add_name(name, 'name')
+    for b in (builder1, builder2):
+        b.add_league(league)
+        b.add_dates(dates)
+        b.add_game_type(game_type)
+        b.finish_query()
+    combined_overall = get_overall_stats(builder1.get_query(), builder2.get_query(), builder1.get_args())
+    if len(combined_overall) == 1:
+        return combined_overall[0]
+    return combined_overall
 
 
 def calc_release_pos(data) -> tuple[float, float]:
