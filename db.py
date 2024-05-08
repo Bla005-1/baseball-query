@@ -209,6 +209,7 @@ def process_batches(total: int):
 
 
 def initialize_threads(pk_dict: dict[str: list[int]]):
+    print('init threads')
     total = sum(len(lst) for lst in pk_dict.values())
     retrieve_threads = []
     for d, v in pk_dict.items():
@@ -219,6 +220,7 @@ def initialize_threads(pk_dict: dict[str: list[int]]):
         retrieve_threads.append(thread1)
         thread2.start()
         retrieve_threads.append(thread2)
+        print(f'created thread for {d}')
     print('created get threads')
     insert_thread = threading.Thread(target=process_batches, args=(total,))
     insert_thread.start()
