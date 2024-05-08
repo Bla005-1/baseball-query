@@ -219,7 +219,7 @@ def initialize_threads(pk_dict: dict[str: list[int]]):
         retrieve_threads.append(thread1)
         thread2.start()
         retrieve_threads.append(thread2)
-
+    print('created get threads')
     insert_thread = threading.Thread(target=process_batches, args=(total,))
     insert_thread.start()
 

@@ -105,4 +105,4 @@ def calc_release_pos(data) -> tuple[float, float]:
 
 
 if __name__ == '__main__':
-    print(basic_pitch_calcs('Ronel Blanco', 'MLB', ('2024-03-20', '2024-05-04')))
+    print(get_pitcher_data('Ronel Blanco', 'MLB', ('2024-03-20', '2024-05-04')))

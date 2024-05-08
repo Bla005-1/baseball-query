@@ -1,6 +1,10 @@
 import sqlite3
 import re
+import os
 from typing import List, Iterable, Any
+
+db_path = os.environ.get('DB_PATH', 'baseball_plays.db')
+print(db_path)
 
 
 def camel_to_snake(camel_case):
@@ -40,7 +44,7 @@ def dict_factory(cursor, row):
 
 
 def connect():
-    conn = sqlite3.connect('baseball_plays.db', timeout=25)
+    conn = sqlite3.connect(db_path, timeout=25)
     cursor = conn.cursor()
     return conn, cursor
 

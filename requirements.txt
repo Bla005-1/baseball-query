@@ -5,3 +5,4 @@ tqdm~=4.65.0
 google~=3.0.0
 requests~=2.31.0
 connexion~=3.0.6
+gspread-dataframe

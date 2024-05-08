@@ -3,33 +3,82 @@ from utils import select_data
 from common_data import add_percentile, calculate_contacts
 
 
-def get_batter_data(name: str, league: str, dates: Tuple[str, str]) -> Dict:
-    args = [dates[0], dates[1], name]
+class QueryBuilder:
+    def __init__(self, base_query):
+        self.base_query = base_query
+        self.args = []
+        self.where = []
+        self.name = None
+
+    def add_name(self, name, column: str = 'name'):
+        self.name = name
+        if name:
+            if isinstance(name, str) or (isinstance(name, list) and len(name) == 1):
+                self.where.append(f'{column} = ?')
+                self.args.append(name if isinstance(name, str) else name[0])
+            else:
+                name = [f'"{x}"' for x in name]
+                self.where.append(f'{column} IN ({", ".join(name)})')
+
+    def add_league(self, league):
+        if league:
+            self.where.append('league = ?')
+            self.args.append(league)
+
+    def add_dates(self, dates):
+        if dates:
+            self.where.append('date BETWEEN ? AND ?')
+            self.args.extend([dates[0], dates[1]])
+
+    def add_game_type(self, game_type):
+        if game_type:
+            self.where.append('game_type = ?')
+            self.args.append(game_type)
+
+    def finish_query(self):
+        if len(self.where) == 1:
+            self.base_query += 'WHERE ' + self.where[0]
+        elif len(self.where) > 1:
+            self.base_query += 'WHERE ' + ' AND '.join(self.where)
+        if self.name is None or isinstance(self.name, list):
+            self.base_query += ' GROUP BY name'
+
+    def get_query(self):
+        return self.base_query
+
+    def get_args(self):
+        return self.args
+
+    def __str__(self):
+        return self.base_query
+
+
+def get_batter_data(name: Union[str, List[str]], league: str = None, dates: Tuple[str, str] = None,
+                    game_type: str = None) -> Union[List[Dict], Dict]:
     batt_query = '''
-        SELECT
+        SELECT 
             batter_name,
             league,
-            pitch_name,
-            COUNT(*) AS seen,
-            AVG(CAST(launch_speed AS REAL)) AS avg_velo,
-            MAX(CAST(launch_speed AS REAL)) AS max_velo,
-            AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle,
-            GROUP_CONCAT(zone) as zones,
-            GROUP_CONCAT(description) as descriptions,
-            GROUP_CONCAT(launch_speed) as percentile_90
+            COUNT(*) AS pitches,
+            GROUP_CONCAT(IFNULL(zone, 0)) as zones,
+            GROUP_CONCAT(pitch_result) as pitch_results,
+            SUM(CASE WHEN pitch_result LIKE "%play%" THEN 1 ELSE 0 END) AS bip,
+            GROUP_CONCAT(launch_speed) as percentile_90,
+            AVG(CAST(launch_speed AS REAL)) AS avg_ev,
+            MAX(CAST(launch_speed AS REAL)) AS max_ev,
+            AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
         FROM all_plays
-        WHERE date BETWEEN ? AND ? AND batter_name = ?
-        AND pitch_name IS NOT NULL
     '''
-    if league:
-        batt_query += ' AND league = ?'
-        args.append(league)
-
-    total_query = batt_query.replace('pitch_name,', '"Total" AS pitch_name,')
-    batt_query += 'GROUP BY pitch_name'
-    args.extend(args)
-    rows = select_data(batt_query + '\nUNION ALL\n' + total_query, args)
+    builder = QueryBuilder(batt_query)
+    builder.add_name(name, 'batter_name')
+    builder.add_league(league)
+    builder.add_dates(dates)
+    builder.add_game_type(game_type)
+    builder.finish_query()
+    rows = select_data(builder.get_query(), builder.get_args())
     processed_rows = process_batter_rows(rows)
+    if len(processed_rows) == 1:
+        return processed_rows[0]
     return processed_rows
 
 
@@ -74,31 +123,13 @@ def basic_batt_calcs(name: Union[str, List[str]], league: str, dates: Tuple[str,
                 SUM(games_played) AS games
             FROM hitters
         '''
-    where = []
-    args = []
-    if name:
-        if isinstance(name, str) or (isinstance(name, list) and len(name) == 1):
-            where.append('name = ?')
-            args.append(name if isinstance(name, str) else name[0])
-        else:
-            name = [f'"{x}"' for x in name]
-            where.append(f'name IN ({", ".join(name)})')
-    if league:
-        where.append('league = ?')
-        args.append(league)
-    if dates:
-        where.append('date BETWEEN ? AND ?')
-        args.extend([dates[0], dates[1]])
-    if game_type:
-        where.append('game_type = ?')
-        args.append(game_type)
-    if len(where) == 1:
-        batt_query += 'WHERE ' + where[0]
-    elif len(where) > 1:
-        batt_query += 'WHERE ' + ' AND '.join(where)
-    if name is None or isinstance(name, list):
-        batt_query += ' GROUP BY name'
-    all_data = select_data(batt_query, args)
+    builder = QueryBuilder(batt_query)
+    builder.add_name(name)
+    builder.add_league(league)
+    builder.add_dates(dates)
+    builder.add_game_type(game_type)
+    builder.finish_query()
+    all_data = select_data(builder.get_query(), builder.get_args())
     finished_results = [perform_calcs(x) for x in all_data if x['games'] is not None]
     return finished_results
 
@@ -137,7 +168,5 @@ def perform_calcs(data):
 
 
 if __name__ == '__main__':
-    r = basic_batt_calcs(None, 'MLB', game_type='R')
-    for calc in r:
-        if calc['OBP'] > .4 and calc['PA'] > 30:
-            print(calc)
+    r = get_batter_data('Freddie Freeman', 'MLB', game_type='R')
+    print(r)
