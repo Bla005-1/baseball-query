@@ -93,7 +93,7 @@ def dict_factory(cursor, row):
 
 
 def connect():
-    conn = sqlite3.connect(db_path, timeout=25)
+    conn = sqlite3.connect(db_path, timeout=30)
     cursor = conn.cursor()
     return conn, cursor
 

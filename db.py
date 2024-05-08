@@ -17,7 +17,6 @@ from utils import DebugManager, connect, select_data
 from batter_data import process_batter_rows
 from pitch_data import process_pitch_rows, get_overall_stats
 from static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys
-from common_data import calculate_percents
 
 logging.basicConfig(
     filename='daily_update.log',
@@ -29,7 +28,9 @@ debug = DebugManager()
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive']
 
-data_queue = Queue(maxsize=100)
+data_queue = Queue(maxsize=90)
+
+google = os.environ.get('GOOGLE', False)
 
 
 def create_table(table: str, key_relation: dict):
@@ -142,6 +143,8 @@ def process_single_batch(table, batch_data, columns, cursor):
 
 def threaded_batch_processing(table, batch_data, columns):
     conn, cursor = connect()
+    conn.execute('PRAGMA journal_mode=WAL;')
+    conn.execute('PRAGMA synchronous=NORMAL;')
     conn.execute('BEGIN TRANSACTION')
     try:
         process_single_batch(table, batch_data, columns, cursor)
@@ -159,9 +162,13 @@ def process_batches(total: int):
         hitter_batch = []
         pitcher_batch = []
         fielder_batch = []
-        for i in range(30):
+        if data_queue.full():
+            batch_size = 85
+        else:
+            batch_size = 30
+        for i in range(batch_size):
             try:
-                data = data_queue.get(timeout=1)
+                data = data_queue.get(timeout=.2)
             except queue.Empty:
                 break
             progress_bar.update(1)
@@ -290,7 +297,6 @@ if __name__ == '__main__':
     create_table('fielders', fielder_db_keys)
     try:
         os.chdir(os.path.dirname(__file__))
-        google = True
         if len(sys.argv) == 2:
             try:
                 s_d = dt.datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
