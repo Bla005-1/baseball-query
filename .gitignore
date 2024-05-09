@@ -4,5 +4,7 @@ __pycache__
 *.db
 *.log
 *.json
+*.db-shm
+*.db-wal
 last_update.txt
 baseball_env
