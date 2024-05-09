@@ -8,6 +8,7 @@ import os
 import sys
 import traceback
 import logging
+from typing import *
 from tqdm import tqdm
 from https import get_plays, get_pks_over_time
 from queue import Queue
@@ -28,12 +29,12 @@ debug = DebugManager()
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive']
 
-data_queue = Queue(maxsize=90)
+data_queue = Queue(maxsize=120)
 
 google = os.environ.get('GOOGLE', False)
 
 
-def create_table(table: str, key_relation: dict):
+def create_table(table: str, key_relation: Dict) -> None:
     columns = ', '.join([f"{column} {data_type}" for column, data_type in key_relation.items()])
     if table == 'all_plays':
         indexes = ['batter_name', 'date', 'league', 'pitch_name', 'pitcher_name',
@@ -53,7 +54,7 @@ def create_table(table: str, key_relation: dict):
 
 
 # p.hit_speed IS NOT NULL AND
-def get_initial_data(game_type: str) -> tuple[list, list, list]:
+def get_initial_data(game_type: str) -> Tuple[List, List, List]:
     batt_query = '''
         SELECT 
             batter_name,
@@ -112,12 +113,12 @@ def get_initial_data(game_type: str) -> tuple[list, list, list]:
     return batter_rows, pitcher_rows, combined_overall
 
 
-def retrieve_data(pk_dict: dict):
+def retrieve_data(pk_dict: Dict) -> None:
     for data in get_plays(pk_dict, debug):
         data_queue.put(data)
 
 
-def execute_query(cursor, query, values):
+def execute_query(cursor, query: str, values: Tuple) -> bool:
     try:
         cursor.execute(query, values)
         return True
@@ -126,7 +127,7 @@ def execute_query(cursor, query, values):
         return False
 
 
-def process_single_batch(table, batch_data, columns, cursor):
+def process_single_batch(table: str, batch_data: List[Dict], columns: List[str], cursor) -> None:
     q_values = ['?' for _ in columns]
     query = f'INSERT INTO {table} ({", ".join(columns)}) VALUES ({", ".join(q_values)})'
     for item in batch_data:
@@ -141,19 +142,21 @@ def process_single_batch(table, batch_data, columns, cursor):
     cursor.close()
 
 
-def threaded_batch_processing(table, batch_data, columns):
+def threaded_batch_processing(table: str, batch_data: List[Dict], columns: List[str]) -> None:
     conn, cursor = connect()
     conn.execute('PRAGMA journal_mode=WAL;')
     conn.execute('PRAGMA synchronous=NORMAL;')
     conn.execute('BEGIN TRANSACTION')
     try:
         process_single_batch(table, batch_data, columns, cursor)
+    except Exception:
+        log.error('Error inserting', exc_info=True)
     finally:
         conn.commit()
         conn.close()
 
 
-def process_batches(total: int):
+def process_batches(total: int) -> None:
     progress_bar = tqdm(total=total, unit='iteration')
     count = 0
     threads = []
@@ -163,7 +166,7 @@ def process_batches(total: int):
         pitcher_batch = []
         fielder_batch = []
         if data_queue.full():
-            batch_size = 85
+            batch_size = 115
         else:
             batch_size = 30
         for i in range(batch_size):
@@ -207,7 +210,7 @@ def process_batches(total: int):
         thread.join()
 
 
-def initialize_threads(pk_dict: dict[str: list[int]]):
+def initialize_threads(pk_dict: Dict[str: List[int]]) -> None:
     total = sum(len(lst) for lst in pk_dict.values())
     retrieve_threads = []
     for d, v in pk_dict.items():
@@ -227,7 +230,7 @@ def initialize_threads(pk_dict: dict[str: list[int]]):
     print(' ')
 
 
-def write_to_sheet(df: pd.DataFrame, key: str, sheet: str = 'Sheet1'):
+def write_to_sheet(df: pd.DataFrame, key: str, sheet: str = 'Sheet1') -> None:
     credentials = Credentials.from_service_account_file('baseball-stats-394502-c0dd81e75f98.json', scopes=SCOPES)
 
     gc = gspread.authorize(credentials)
@@ -255,12 +258,12 @@ def add_to_google():
     write_last_update()
 
 
-def write_last_update():
+def write_last_update() -> None:
     with open('last_update.txt', 'w') as last_update:
         last_update.write(str(dt.date.today()))
 
 
-def daily_update(start_date=None, google=True):
+def daily_update(start_date=Union[str, dt.date], do_google: bool = True) -> None:
     if start_date is None:
         try:
             with open('last_update.txt', 'r') as last_update:
@@ -274,7 +277,7 @@ def daily_update(start_date=None, google=True):
     the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)
     initialize_threads(the_pk_dict)
     print(debug)
-    if google:
+    if do_google:
         try:
             add_to_google()
             log.info('Successfully completed todays run')
@@ -300,12 +303,12 @@ if __name__ == '__main__':
         if len(sys.argv) == 2:
             try:
                 s_d = dt.datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
-                daily_update(start_date=s_d, google=google)
+                daily_update(start_date=s_d, do_google=google)
             except ValueError:
                 print('Format using YYYY-MM-DD')
                 exit(1)
         else:
-            daily_update(google=google)
+            daily_update(do_google=google)
     except Exception:
         log.error('An error occurred:', exc_info=True)
         exit(1)

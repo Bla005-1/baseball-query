@@ -4,7 +4,7 @@ from utils import select_data, QueryBuilder
 from common_data import calculate_percents
 
 
-def get_overall_stats(query1, query2, args):
+def get_overall_stats(query1: str, query2: str, args: Iterable) -> List:
     overall_pitchers = select_data(query1, args)
     more_overall_pitchers = select_data(query2, args)
     combined_overall = {}
