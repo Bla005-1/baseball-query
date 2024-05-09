@@ -3,8 +3,8 @@ from utils import select_data, QueryBuilder
 from common_data import add_percentile, calculate_contacts
 
 
-def get_batter_data(name: Union[str, List[str]], league: str = None, dates: Tuple[str, str] = None,
-                    game_type: str = None) -> Union[List[Dict], Dict]:
+def get_batter_data(name: str | List[str], league: str = None, dates: Tuple[str, str] = None,
+                    game_type: str = None) -> List[Dict] | Dict:
     batt_query = '''
         SELECT 
             batter_name,
@@ -50,7 +50,7 @@ def process_batter_rows(batter_data: List[Dict]) -> List[Dict]:
     return processed_data
 
 
-def basic_batt_calcs(name: Union[str, List[str]], league: str, dates: Tuple[str, str] = None,
+def basic_batt_calcs(name: str | List[str], league: str, dates: Tuple[str, str] = None,
                      game_type: str = None) -> List[Dict]:
     batt_query = '''
             SELECT 

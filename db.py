@@ -210,7 +210,7 @@ def process_batches(total: int) -> None:
         thread.join()
 
 
-def initialize_threads(pk_dict: Dict[str: List[int]]) -> None:
+def initialize_threads(pk_dict: Dict[str, List[int]]) -> None:
     total = sum(len(lst) for lst in pk_dict.values())
     retrieve_threads = []
     for d, v in pk_dict.items():
@@ -263,7 +263,7 @@ def write_last_update() -> None:
         last_update.write(str(dt.date.today()))
 
 
-def daily_update(start_date=Union[str, dt.date], do_google: bool = True) -> None:
+def daily_update(start_date: None | dt.date | str = None, do_google: bool = True) -> None:
     if start_date is None:
         try:
             with open('last_update.txt', 'r') as last_update:

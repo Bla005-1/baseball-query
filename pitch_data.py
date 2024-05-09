@@ -32,8 +32,8 @@ def process_pitch_rows(pitch_data: List[Dict]) -> List[Dict]:
     return processed_data
 
 
-def basic_pitch_calcs(name: Union[str, List[str]], league: str = None, dates: Tuple[str, str] = None,
-                      game_type: str = None) -> Union[List[Dict], Dict]:
+def basic_pitch_calcs(name: str | List[str], league: str = None, dates: Tuple[str, str] = None,
+                      game_type: str = None) -> List[Dict] | Dict:
     query = '''
         SELECT SUM(innings_pitched) AS IP,
             9 * SUM(earned_runs) / SUM(innings_pitched) AS ERA,
@@ -56,8 +56,8 @@ def basic_pitch_calcs(name: Union[str, List[str]], league: str = None, dates: Tu
 
 
 # could make get_data a common function between pitch and batt since only query is different
-def get_pitcher_data(name: Union[str, List[str]], league: str = None, dates: Tuple[str, str] = None,
-                     game_type: str = None) -> Union[List[Dict], Dict]:
+def get_pitcher_data(name: str | List[str], league: str = None, dates: Tuple[str, str] = None,
+                     game_type: str = None) -> List[Dict] | Dict:
     pitch_query1 = '''
             SELECT league, 
                 pitcher_name,
