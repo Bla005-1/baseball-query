@@ -56,8 +56,8 @@ def basic_pitch_calcs(name: str | List[str], league: str = None, dates: Tuple[st
 
 
 # could make get_data a common function between pitch and batt since only query is different
-def get_pitcher_data(name: str | List[str], league: str = None, dates: Tuple[str, str] = None,
-                     game_type: str = None) -> List[Dict] | Dict:
+def get_pitcher_data(name: str | List[str], league: str = None, game_type: str = 'R',
+                     dates: Tuple[str, str] = None, year: str = '2024') -> List[Dict] | Dict:
     pitch_query1 = '''
             SELECT league, 
                 pitcher_name,
@@ -82,6 +82,8 @@ def get_pitcher_data(name: str | List[str], league: str = None, dates: Tuple[str
     for b in (builder1, builder2):
         b.add_league(league)
         b.add_dates(dates)
+        if dates is None:
+            b.add_year(year)
         b.add_game_type(game_type)
         b.finish_query()
     combined_overall = get_overall_stats(builder1.get_query(), builder2.get_query(), builder1.get_args())
@@ -121,4 +123,4 @@ def calc_release_pos(data) -> tuple[float, float]:
 
 
 if __name__ == '__main__':
-    print(get_pitcher_data('Ronel Blanco', 'MLB', ('2024-03-20', '2024-05-04')))
+    print(get_pitcher_data('Ronel Blanco', 'MLB', dates=('2024-03-20', '2024-05-04')))

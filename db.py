@@ -1,7 +1,10 @@
+import json
 import queue
 import sqlite3
 import threading
 import datetime as dt
+import time
+
 import pandas as pd
 import gspread
 import os
@@ -30,6 +33,7 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive']
 
 data_queue = Queue(maxsize=120)
+failed_queue = Queue()
 
 google = os.environ.get('GOOGLE', False)
 
@@ -143,17 +147,22 @@ def process_single_batch(table: str, batch_data: List[Dict], columns: List[str],
 
 
 def threaded_batch_processing(table: str, batch_data: List[Dict], columns: List[str]) -> None:
-    conn, cursor = connect()
-    conn.execute('PRAGMA journal_mode=WAL;')
-    conn.execute('PRAGMA synchronous=NORMAL;')
-    conn.execute('BEGIN TRANSACTION')
     try:
-        process_single_batch(table, batch_data, columns, cursor)
-    except Exception:
-        log.error('Error inserting', exc_info=True)
-    finally:
-        conn.commit()
-        conn.close()
+        conn, cursor = connect()
+        conn.execute('PRAGMA journal_mode=WAL;')
+        conn.execute('PRAGMA synchronous=NORMAL;')
+        conn.execute('BEGIN TRANSACTION')
+        try:
+            process_single_batch(table, batch_data, columns, cursor)
+        except Exception:
+            log.error('Error inserting', exc_info=True)
+        finally:
+            conn.commit()
+            conn.close()
+    except sqlite3.OperationalError:
+        failed_queue.put((table, batch_data, columns))
+        print('DB was locked')
+        time.sleep(5)
 
 
 def process_batches(total: int) -> None:
@@ -171,7 +180,7 @@ def process_batches(total: int) -> None:
             batch_size = 30
         for i in range(batch_size):
             try:
-                data = data_queue.get(timeout=.2)
+                data = data_queue.get(timeout=1)
             except queue.Empty:
                 break
             progress_bar.update(1)
@@ -201,8 +210,8 @@ def process_batches(total: int) -> None:
             thread = threading.Thread(target=threaded_batch_processing, args=(table, batch_data, keys))
             thread.start()
             threads.append(thread)
-        if len(threads) >= 12:
-            for thread in threads[:3]:
+        if len(threads) >= 8:
+            for thread in threads[:4]:
                 thread.join()
                 threads.remove(thread)
     progress_bar.close()
@@ -227,6 +236,16 @@ def initialize_threads(pk_dict: Dict[str, List[int]]) -> None:
     for thread in retrieve_threads:
         thread.join()
     insert_thread.join()
+    failed = []
+    while True:
+        try:
+            f = failed_queue.get(timeout=1)
+            failed.append(f)
+        except queue.Empty:
+            break
+    if failed:
+        with open('failed.json', 'w') as f:
+            json.dump(failed, f)
     print(' ')
 
 

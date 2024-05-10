@@ -3,8 +3,8 @@ from utils import select_data, QueryBuilder
 from common_data import add_percentile, calculate_contacts
 
 
-def get_batter_data(name: str | List[str], league: str = None, dates: Tuple[str, str] = None,
-                    game_type: str = None) -> List[Dict] | Dict:
+def get_batter_data(name: str | List[str], league: str = None, game_type: str = 'R',
+                    dates: Tuple[str, str] = None, year: str = '2024') -> List[Dict] | Dict:
     batt_query = '''
         SELECT 
             batter_name,
@@ -23,6 +23,8 @@ def get_batter_data(name: str | List[str], league: str = None, dates: Tuple[str,
     builder.add_name(name, 'batter_name')
     builder.add_league(league)
     builder.add_dates(dates)
+    if dates is None:
+        builder.add_year(year)
     builder.add_game_type(game_type)
     builder.finish_query()
     rows = select_data(builder.get_query(), builder.get_args())
@@ -36,7 +38,10 @@ def process_batter_rows(batter_data: List[Dict]) -> List[Dict]:
     processed_data = []
     for batter_row in batter_data:
         batter_row = add_percentile(batter_row)
-        descriptions = batter_row.get('pitch_results', '').split(',')
+        descriptions = batter_row.get('pitch_results', '')
+        if descriptions is None:
+            descriptions = ''
+        descriptions = descriptions.split(',')
         zones = batter_row.get('zones', '')
         if zones is None:
             zones = []
@@ -118,5 +123,5 @@ def perform_calcs(data):
 
 
 if __name__ == '__main__':
-    r = get_batter_data('Freddie Freeman', 'MLB', game_type='R')
+    r = get_batter_data('Freddie Freeman', 'MLB', dates=('2024-01-01', '2024-04-01'))
     print(r)

@@ -23,17 +23,22 @@ class QueryBuilder:
                 name = [f'"{x}"' for x in name]
                 self.where.append(f'{column} IN ({", ".join(name)})')
 
-    def add_league(self, league):
+    def add_league(self, league: str):
         if league:
             self.where.append('league = ?')
             self.args.append(league)
 
-    def add_dates(self, dates):
+    def add_dates(self, dates: str):
         if dates:
             self.where.append('date BETWEEN ? AND ?')
             self.args.extend([dates[0], dates[1]])
 
-    def add_game_type(self, game_type):
+    def add_year(self, year: str):
+        if year:
+            self.where.append('date LIKE ?')
+            self.args.append(year + '%')
+
+    def add_game_type(self, game_type: str):
         if game_type:
             self.where.append('game_type = ?')
             self.args.append(game_type)
@@ -60,40 +65,13 @@ def camel_to_snake(camel_case):
     return re.sub(r'(?<!^)(?=[A-Z])', '_', camel_case).lower()
 
 
-def nested_list(rows: List[dict]):
-    nested_lists = []
-    current_game = None
-    current_inning = None
-    inning_list = []
-    game_list = []
-    for row in rows:
-        game_pk, inning = row['game_pk'], row['inning']
-        if game_pk != current_game:
-            if game_list:
-                nested_lists.append(game_list)
-                game_list = []
-            current_game = game_pk
-        if inning != current_inning:
-            if inning_list:
-                game_list.append(inning_list)
-            inning_list = [row]
-            current_inning = inning
-        else:
-            inning_list.append(row)
-
-    if inning_list:
-        game_list.append(inning_list)
-        nested_lists.append(game_list)
-    return nested_lists
-
-
 def dict_factory(cursor, row):
     fields = [column[0] for column in cursor.description]
     return {key: value for key, value in zip(fields, row)}
 
 
 def connect():
-    conn = sqlite3.connect(db_path, timeout=120)
+    conn = sqlite3.connect(db_path, timeout=680)
     cursor = conn.cursor()
     return conn, cursor
 
