@@ -72,7 +72,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             MAX(CAST(launch_speed AS REAL)) AS max_ev,
             AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
         FROM all_plays
-        WHERE game_type = ?
+        WHERE game_type = ? AND date LIKE "2024%"
         GROUP BY league, batter_name
         '''
     pitch_query = '''
@@ -87,7 +87,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             AVG(CAST(pfx_x AS REAL)) AS h_break,
             GROUP_CONCAT(pitch_result) AS pitch_results
         FROM all_plays 
-        WHERE game_type = ?
+        WHERE game_type = ? AND date LIKE "2024%"
         GROUP BY league, pitcher_name, pitch_name
         '''
     pitch_query2 = '''
@@ -95,7 +95,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             pitcher_name,
             COUNT(*) AS count,
             GROUP_CONCAT(pitch_result) AS pitch_results
-        FROM all_plays WHERE game_type = ?
+        FROM all_plays WHERE game_type = ? AND date LIKE "2024%"
         GROUP BY league, pitcher_name
         '''
     pitch_query3 = '''
@@ -106,7 +106,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             SUM(strike_outs) AS strike_outs,
             SUM(base_on_balls) AS walks,
             SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k_bb
-        FROM pitchers WHERE game_type = ?
+        FROM pitchers WHERE game_type = ? AND date LIKE "2024%"
         GROUP BY league, name
         '''
     batter_data = select_data(batt_query, [game_type])
@@ -189,7 +189,6 @@ def process_batches(total: int) -> None:
                 data_queue.task_done()
                 continue
             plays, players = data
-            debug.increment('DB', 'total_plays', len(play_batch))
             play_batch.extend(plays)
             if not players:
                 continue
@@ -198,7 +197,7 @@ def process_batches(total: int) -> None:
             fielder_batch.extend(players['fielders'])
             data_queue.task_done()
             debug.increment('DB', 'counted_games')
-
+        debug.increment('DB', 'total_plays', len(play_batch))
         tables = [
             ('all_plays', play_batch, db_keys),
             ('hitters', hitter_batch, hitter_db_keys),
@@ -290,7 +289,7 @@ def daily_update(start_date: None | dt.date | str = None, do_google: bool = True
                 start_date = dt.datetime.strptime(date_str, "%Y-%m-%d").date()
         except FileNotFoundError:
             start_date = dt.date.today() - dt.timedelta(days=1)
-    # start_date = start_date - dt.timedelta(days=1)
+        start_date = start_date - dt.timedelta(days=1)
     log.info(f'Using {start_date} as the beginning of new requests')
     print(f'Using {start_date} as the beginning of new requests')
     the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)

@@ -123,5 +123,5 @@ def perform_calcs(data):
 
 
 if __name__ == '__main__':
-    r = get_batter_data('Freddie Freeman', 'MLB', dates=('2024-01-01', '2024-04-01'))
+    r = get_batter_data('Freddie Freeman', 'MLB', game_type='R', year='2024')
     print(r)
