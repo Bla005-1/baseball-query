@@ -43,9 +43,7 @@ def basic_pitch_calcs(name: str | List[str], league: str = None, dates: Tuple[st
     '''
     builder = QueryBuilder(query)
     builder.add_name(name, 'name')
-    builder.add_league(league)
-    builder.add_dates(dates)
-    builder.add_game_type(game_type)
+    builder.add_all_but_name(league, dates, game_type=game_type)
     builder.finish_query()
     calcs = select_data(builder.get_query(), builder.get_args())
     for i, c in enumerate(calcs):
@@ -80,11 +78,7 @@ def get_pitcher_data(name: str | List[str], league: str = None, game_type: str =
     builder1.add_name(name, 'pitcher_name')
     builder2.add_name(name, 'name')
     for b in (builder1, builder2):
-        b.add_league(league)
-        b.add_dates(dates)
-        if dates is None:
-            b.add_year(year)
-        b.add_game_type(game_type)
+        b.add_all_but_name(league, dates, year, game_type)
         b.finish_query()
     combined_overall = get_overall_stats(builder1.get_query(), builder2.get_query(), builder1.get_args())
     if len(combined_overall) == 1:

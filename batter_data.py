@@ -21,11 +21,7 @@ def get_batter_data(name: str | List[str], league: str = None, game_type: str = 
     '''
     builder = QueryBuilder(batt_query)
     builder.add_name(name, 'batter_name')
-    builder.add_league(league)
-    builder.add_dates(dates)
-    if dates is None:
-        builder.add_year(year)
-    builder.add_game_type(game_type)
+    builder.add_all_but_name(league, dates, year, game_type)
     builder.finish_query()
     rows = select_data(builder.get_query(), builder.get_args())
     processed_rows = process_batter_rows(rows)
@@ -80,9 +76,7 @@ def basic_batt_calcs(name: str | List[str], league: str, dates: Tuple[str, str] 
         '''
     builder = QueryBuilder(batt_query)
     builder.add_name(name)
-    builder.add_league(league)
-    builder.add_dates(dates)
-    builder.add_game_type(game_type)
+    builder.add_all_but_name(league, dates, game_type=game_type)
     builder.finish_query()
     all_data = select_data(builder.get_query(), builder.get_args())
     finished_results = [perform_calcs(x) for x in all_data if x['games'] is not None]

@@ -6,7 +6,7 @@ all_swings = ['Foul', 'Foul Bunt', 'Foul Tip Bunt', 'Foul Pitchout', 'Missed Bun
 
 
 def calculate_contacts(pitch_results: List[str], zones: List[str]) -> Dict:
-    zones = [int(x) for x in zones]
+    zones = [int(x) if x is not None else 0 for x in zones]
     if len(zones) < len(pitch_results):
         zones = [0] * len(pitch_results)
     out_of_zone = 0

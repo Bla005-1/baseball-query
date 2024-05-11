@@ -11,6 +11,7 @@ class QueryBuilder:
         self.base_query = base_query
         self.args = []
         self.where = []
+        self.order = None
         self.name = None
 
     def add_name(self, name, column: str = 'name'):
@@ -23,12 +24,18 @@ class QueryBuilder:
                 name = [f'"{x}"' for x in name]
                 self.where.append(f'{column} IN ({", ".join(name)})')
 
+    def add_all_but_name(self, league: str = None, dates=None, year: str = None, game_type: str = None):
+        self.add_league(league)
+        self.add_dates(dates)
+        self.add_year(year)
+        self.add_game_type(game_type)
+
     def add_league(self, league: str):
         if league:
             self.where.append('league = ?')
             self.args.append(league)
 
-    def add_dates(self, dates: str):
+    def add_dates(self, dates):
         if dates:
             self.where.append('date BETWEEN ? AND ?')
             self.args.extend([dates[0], dates[1]])
@@ -46,6 +53,9 @@ class QueryBuilder:
     def add_other(self, where_clause: str):
         self.where.append(where_clause)
 
+    def order_by(self, column: str):
+        self.order = f' ORDER BY {column}'
+
     def finish_query(self):
         if len(self.where) == 1:
             self.base_query += 'WHERE ' + self.where[0]
@@ -53,6 +63,8 @@ class QueryBuilder:
             self.base_query += 'WHERE ' + ' AND '.join(self.where)
         if self.name is None or isinstance(self.name, list):
             self.base_query += ' GROUP BY name'
+        if self.order is not None:
+            self.base_query += self.order
 
     def get_query(self):
         return self.base_query
