@@ -43,6 +43,9 @@ class QueryBuilder:
             self.where.append('game_type = ?')
             self.args.append(game_type)
 
+    def add_other(self, where_clause: str):
+        self.where.append(where_clause)
+
     def finish_query(self):
         if len(self.where) == 1:
             self.base_query += 'WHERE ' + self.where[0]

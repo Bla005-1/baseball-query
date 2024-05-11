@@ -73,7 +73,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
         FROM all_plays
         WHERE game_type = ? AND date LIKE "2024%"
-        GROUP BY league, batter_name
+        GROUP BY league, batter_id
         '''
     pitch_query = '''
         SELECT league, 
@@ -88,7 +88,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             GROUP_CONCAT(pitch_result) AS pitch_results
         FROM all_plays 
         WHERE game_type = ? AND date LIKE "2024%"
-        GROUP BY league, pitcher_name, pitch_name
+        GROUP BY league, pitcher_id, pitch_name
         '''
     pitch_query2 = '''
         SELECT league, 
@@ -96,7 +96,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             COUNT(*) AS count,
             GROUP_CONCAT(pitch_result) AS pitch_results
         FROM all_plays WHERE game_type = ? AND date LIKE "2024%"
-        GROUP BY league, pitcher_name
+        GROUP BY league, pitcher_id
         '''
     pitch_query3 = '''
         SELECT league,
@@ -107,7 +107,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             SUM(base_on_balls) AS walks,
             SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k_bb
         FROM pitchers WHERE game_type = ? AND date LIKE "2024%"
-        GROUP BY league, name
+        GROUP BY league, player_id
         '''
     batter_data = select_data(batt_query, [game_type])
     pitch_data = select_data(pitch_query, [game_type])
@@ -298,7 +298,7 @@ def daily_update(start_date: None | dt.date | str = None, do_google: bool = True
     if do_google:
         try:
             add_to_google()
-            log.info('Successfully completed todays run')
+            log.info('Successfully added to google')
             print('Complete')
         except Exception:
             log.error('An error occurred:', exc_info=True)
