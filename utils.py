@@ -91,6 +91,21 @@ def connect():
     return conn, cursor
 
 
+def create_league_average_table():
+    query = '''
+    CREATE TABLE IF NOT EXISTS league_averages (
+        league TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        mean REAL,
+        stddev REAL,
+        PRIMARY KEY (league, metric)
+    )'''
+    conn, cursor = connect()
+    cursor.execute(query)
+    conn.commit()
+    conn.close()
+
+
 def select_data(query: str, args: Iterable = None, row_factory=dict_factory) -> List[Any]:
     conn, cursor = connect()
     try:

@@ -17,10 +17,10 @@ from https import get_plays, get_pks_over_time
 from queue import Queue
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
-from utils import DebugManager, connect, select_data
-from batter_data import process_batter_rows
-from pitch_data import process_pitch_rows, get_overall_stats
-from static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys
+from utils import DebugManager, connect, select_data, create_league_average_table
+from batter_data import process_batter_rows, add_batter_league_averages
+from pitch_data import process_pitch_rows, get_overall_stats, add_pitcher_league_averages
+from static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys, sport_ids
 
 logging.basicConfig(
     filename='daily_update.log',
@@ -68,6 +68,7 @@ def get_initial_data(game_type: str) -> Tuple[List, List, List]:
             GROUP_CONCAT(pitch_result) as pitch_results,
             SUM(CASE WHEN pitch_result LIKE "%play%" THEN 1 ELSE 0 END) AS bip,
             GROUP_CONCAT(launch_speed) as percentile_90,
+            GROUP_CONCAT(launch_angle) as launch_angles,
             AVG(CAST(launch_speed AS REAL)) AS avg_ev,
             MAX(CAST(launch_speed AS REAL)) AS max_ev,
             AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
@@ -295,13 +296,22 @@ def daily_update(start_date: None | dt.date | str = None, do_google: bool = True
     the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)
     initialize_threads(the_pk_dict)
     print(debug)
+    try:
+        for key in sport_ids.keys():
+            add_batter_league_averages(key)
+            add_pitcher_league_averages(key)
+        log.info('Added league averages')
+        print('Added league averages')
+    except Exception:
+        log.error('Error with league averages:', exc_info=True)
+        traceback.print_exc()
     if do_google:
         try:
             add_to_google()
             log.info('Successfully added to google')
             print('Complete')
         except Exception:
-            log.error('An error occurred:', exc_info=True)
+            log.error('Error with google:', exc_info=True)
             traceback.print_exc()
             write_last_update()
             exit(1)
@@ -316,6 +326,7 @@ if __name__ == '__main__':
     create_table('hitters', hitter_db_keys)
     create_table('pitchers', pitcher_db_keys)
     create_table('fielders', fielder_db_keys)
+    create_league_average_table()
     try:
         os.chdir(os.path.dirname(__file__))
         if len(sys.argv) == 2:

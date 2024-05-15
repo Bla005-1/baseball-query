@@ -1,6 +1,27 @@
 from typing import *
 from utils import select_data, QueryBuilder
-from common_data import add_percentile, calculate_contacts
+from common_data import add_percentile, calculate_contacts, calculate_barrel_percent, insert_league_averages
+
+
+def add_batter_league_averages(league: str):
+    batt_query = '''
+            SELECT
+                league,
+                GROUP_CONCAT(IFNULL(zone, 0)) as zones,
+                GROUP_CONCAT(pitch_result) as pitch_results,
+                GROUP_CONCAT(launch_speed) AS percentile_90,
+                GROUP_CONCAT(launch_angle) AS launch_angles,
+                AVG(CAST(launch_speed AS REAL)) AS avg_ev,
+                MAX(CAST(launch_speed AS REAL)) AS max_ev,
+                AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
+            FROM all_plays WHERE league = ? AND game_type = 'R' AND date LIKE "2024%"
+            GROUP BY batter_name
+        '''
+    data = select_data(batt_query, (league,))
+    processed_data = process_batter_rows(data)
+    keys = ['percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle', 'contact_percent', 'zone_contact', 'chase_percent',
+            'swing_percent', 'zone_swing_percent']
+    insert_league_averages(league, processed_data, keys)
 
 
 def get_batter_data(name: str | List[str], league: str = None, game_type: str = 'R',
@@ -13,7 +34,8 @@ def get_batter_data(name: str | List[str], league: str = None, game_type: str = 
             GROUP_CONCAT(IFNULL(zone, 0)) as zones,
             GROUP_CONCAT(pitch_result) as pitch_results,
             SUM(CASE WHEN pitch_result LIKE "%play%" THEN 1 ELSE 0 END) AS bip,
-            GROUP_CONCAT(launch_speed) as percentile_90,
+            GROUP_CONCAT(launch_speed) AS percentile_90,
+            GROUP_CONCAT(launch_angle) AS launch_angles,
             AVG(CAST(launch_speed AS REAL)) AS avg_ev,
             MAX(CAST(launch_speed AS REAL)) AS max_ev,
             AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle
@@ -33,6 +55,17 @@ def get_batter_data(name: str | List[str], league: str = None, game_type: str = 
 def process_batter_rows(batter_data: List[Dict]) -> List[Dict]:
     processed_data = []
     for batter_row in batter_data:
+        hit_speeds = batter_row.get('percentile_90', None)  # don't let the dict key name confuse you
+        if hit_speeds is not None:
+            hit_speeds = hit_speeds.split(',')
+        launch_angles = batter_row.get('launch_angles', None)
+        if launch_angles is not None:
+            launch_angles = launch_angles.split(',')
+        batter_row.pop('launch_angles')
+        if launch_angles and hit_speeds:
+            barrel = calculate_barrel_percent(launch_angles, hit_speeds)
+        else:
+            barrel = 0
         batter_row = add_percentile(batter_row)
         descriptions = batter_row.get('pitch_results', '')
         if descriptions is None:
@@ -45,6 +78,7 @@ def process_batter_rows(batter_data: List[Dict]) -> List[Dict]:
             zones = zones.split(',')
         percents = calculate_contacts(descriptions, zones)
         batter_row.update({k: v * 100 for k, v in percents.items()})
+        batter_row['barrel_per_bbe'] = round(barrel, 2)
         batter_row.pop('zones')
         batter_row.pop('pitch_results')
         processed_data.append(batter_row)
@@ -117,5 +151,6 @@ def perform_calcs(data):
 
 
 if __name__ == '__main__':
-    r = get_batter_data('Freddie Freeman', 'MLB', game_type='R', year='2024')
-    print(r)
+    add_batter_league_averages('ROOKIE BALL')
+    #r = get_batter_data('Freddie Freeman', 'MLB', game_type='R', year='2024')
+    #print(r)

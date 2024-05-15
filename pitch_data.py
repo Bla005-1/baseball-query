@@ -1,7 +1,20 @@
 import math
 from typing import *
 from utils import select_data, QueryBuilder
-from common_data import calculate_percents
+from common_data import calculate_percents, insert_league_averages
+
+
+def add_pitcher_league_averages(league: str):
+    pitch_query = '''
+            SELECT league, 
+                GROUP_CONCAT(pitch_result) AS pitch_results
+            FROM all_plays WHERE league = ? AND game_type = 'R' AND date LIKE "2024%"
+            GROUP BY pitcher_name
+            '''
+    data = select_data(pitch_query, (league,))
+    processed_data = process_pitch_rows(data)
+    keys = ['strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
+    insert_league_averages(league, processed_data, keys)
 
 
 def get_overall_stats(query1: str, query2: str, args: Iterable) -> List:
@@ -24,8 +37,9 @@ def process_pitch_rows(pitch_data: List[Dict]) -> List[Dict]:
         descriptions = pitch_row.get('pitch_results', '').split(',')
         percents = calculate_percents(descriptions)
         pitch_row['strike_percent'] = percents['o_strike_percent']
-        pitch_row['csw_percent'] = percents['o_csw']
-        pitch_row['swstr_percent'] = percents['o_swstr']
+        pitch_row['csw_percent'] = percents['o_csw_percent']
+        pitch_row['swstr_percent'] = percents['o_swstr_percent']
+        pitch_row['ball_percent'] = percents['o_ball_percent']
         pitch_row.pop('pitch_results')
         my_data.update(pitch_row)
         processed_data.append(my_data)
@@ -117,4 +131,5 @@ def calc_release_pos(data) -> tuple[float, float]:
 
 
 if __name__ == '__main__':
-    print(get_pitcher_data('Ronel Blanco', 'MLB', dates=('2024-03-20', '2024-05-04')))
+    add_pitcher_league_averages('A+')
+    # print(get_pitcher_data('Ronel Blanco', 'MLB', dates=('2024-03-20', '2024-05-04')))
