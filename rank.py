@@ -1,19 +1,25 @@
+import json
 from typing import List, Dict
 from utils import select_data
 from batter_data import get_batter_data
 
-weights = {
-    'avg_ev': 0.19,
-    'max_ev': 0.06,
-    'barrel_per_bbe': 0.19,
-    'contact_percent': 0.14,
-    'zone_contact': 0.09,
-    'chase_percent': 0.04,
-    'swing_percent': 0.04,
-    'zone_swing_percent': 0.07,
-    'avg_hit_angle': 0.04,
-    'percentile_90': 0.14
-}
+with open('optimized_weights.json', 'r') as f:
+    weights = json.load(f)
+
+if not weights:
+    print('Using defaults')
+    weights = {
+        'avg_ev': 0.19,
+        'max_ev': 0.06,
+        'barrel_per_bbe': 0.19,
+        'contact_percent': 0.14,
+        'zone_contact': 0.09,
+        'chase_percent': 0.04,
+        'swing_percent': 0.04,
+        'zone_swing_percent': 0.07,
+        'avg_hit_angle': 0.04,
+        'percentile_90': 0.14
+    }
 
 
 def calculate_player_score(row: Dict) -> float:
