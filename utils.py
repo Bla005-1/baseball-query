@@ -13,9 +13,11 @@ class QueryBuilder:
         self.where = []
         self.order = None
         self.name = None
+        self.name_column = 'name'
 
     def add_name(self, name, column: str = 'name'):
         self.name = name
+        self.name_column = column
         if name:
             if isinstance(name, str) or (isinstance(name, list) and len(name) == 1):
                 self.where.append(f'{column} = ?')
@@ -62,7 +64,7 @@ class QueryBuilder:
         elif len(self.where) > 1:
             self.base_query += 'WHERE ' + ' AND '.join(self.where)
         if self.name is None or isinstance(self.name, list):
-            self.base_query += ' GROUP BY name'
+            self.base_query += f' GROUP BY {self.name_column}'
         if self.order is not None:
             self.base_query += self.order
 
