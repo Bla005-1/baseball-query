@@ -39,6 +39,9 @@ def main():
     league = 'MLB'
     names = select_data('SELECT DISTINCT name FROM hitters WHERE game_type = ? AND league = ?', ('R', league))
     batter_data = get_batter_data([r['name'] for r in names], league=league)
+    for batter in batter_data:
+        if batter['pitches'] < 30:
+            batter_data.remove(batter)
     ranked_players = rank_players(batter_data)
     count = 1
     for player in ranked_players[:30]:
