@@ -49,11 +49,22 @@ def process_pitch_rows(pitch_data: List[Dict]) -> List[Dict]:
 def basic_pitch_calcs(name: str | List[str], league: str = None, dates: Tuple[str, str] = None,
                       game_type: str = None) -> List[Dict] | Dict:
     query = '''
-        SELECT SUM(innings_pitched) AS IP,
+        SELECT name,
+            SUM(innings_pitched) AS IP,
             9 * SUM(earned_runs) / SUM(innings_pitched) AS ERA,
             SUM(strike_outs) / SUM(CAST(batters_faced AS REAL)) AS strikeout_ratio,
-            SUM(base_on_balls) / SUM(CAST(batters_faced AS REAL)) AS walk_ratio
-        FROM pitchers WHERE name = ?
+            SUM(base_on_balls) / SUM(CAST(batters_faced AS REAL)) AS walk_ratio,
+            SUM(fly_outs) AS fly_outs,
+            SUM(ground_outs) AS ground_outs,
+            SUM(air_outs) AS air_outs,
+            SUM(runs) AS runs,
+            SUM(doubles) AS doubles,
+            SUM(triples) AS triples,
+            SUM(home_runs) AS home_runs,
+            SUM(at_bats) AS at_bats,
+            SUM(balls) AS balls,
+            SUM(strikes) AS strikes
+        FROM pitchers
     '''
     builder = QueryBuilder(query)
     builder.add_name(name, 'name')
@@ -61,7 +72,7 @@ def basic_pitch_calcs(name: str | List[str], league: str = None, dates: Tuple[st
     builder.finish_query()
     calcs = select_data(builder.get_query(), builder.get_args())
     for i, c in enumerate(calcs):
-        calcs[i] = {k: round(v, 3) for k, v in c.items()}
+        calcs[i] = {k: round(v, 3) if not isinstance(v, str) else v for k, v in c.items()}
     if len(calcs) == 1:
         return calcs[0]
     return calcs

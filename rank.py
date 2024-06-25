@@ -1,9 +1,10 @@
 import json
+import pandas as pd
 from typing import List, Dict
 from utils import select_data
-from batter_data import get_batter_data
+from pitch_data import get_pitcher_data, basic_pitch_calcs
 
-with open('optimized_weights.json', 'r') as f:
+with open('pitcher_optimized_weights.json', 'r') as f:
     weights = json.load(f)
 
 if not weights:
@@ -43,15 +44,18 @@ def rank_players(data: List[Dict]) -> List[Dict]:
 # Example usage
 def main():
     league = 'MLB'
-    names = select_data('SELECT DISTINCT name FROM hitters WHERE game_type = ? AND league = ?', ('R', league))
-    batter_data = get_batter_data([r['name'] for r in names], league=league)
+    names = select_data('SELECT DISTINCT name FROM pitchers WHERE game_type = ? AND league = ?', ('R', league))
+    names = [r['name'] for r in names]
+    batter_data = pd.DataFrame(get_pitcher_data(names, league=league))
+    extra_batter_data = pd.DataFrame(basic_pitch_calcs(names, league=league))
     for batter in batter_data:
-        if batter['pitches'] < 30:
+        if batter['IP'] < 3:
             batter_data.remove(batter)
-    ranked_players = rank_players(batter_data)
+    merged_data = pd.merge(batter_data, extra_batter_data, left_on='pitcher_name', right_on='name')
+    ranked_players = rank_players(merged_data)
     count = 1
     for player in ranked_players[:30]:
-        print(f"{count}. {player['batter_name']}, Score: {player['score']}")
+        print(f"{count}. {player['pitcher_name']}, Score: {player['score']}")
         count += 1
 
 
