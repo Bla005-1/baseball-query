@@ -23,7 +23,7 @@ if not weights:
     }
 
 
-def calculate_player_score(row: Dict) -> float:
+def calculate_player_score(row: pd.Series) -> float:
     score = 0.0
     for metric, weight in weights.items():
         value = row.get(metric, 0)
@@ -35,10 +35,9 @@ def calculate_player_score(row: Dict) -> float:
     return score
 
 
-def rank_players(data: List[Dict]) -> List[Dict]:
-    for row in data:
-        row['score'] = calculate_player_score(row)
-    return sorted(data, key=lambda x: x['score'], reverse=True)
+def rank_players(data: pd.DataFrame) -> pd.DataFrame:
+    data['score'] = data.apply(calculate_player_score, axis=1)
+    return data.sort_values('score', ascending=False)
 
 
 # Example usage
@@ -48,15 +47,10 @@ def main():
     names = [r['name'] for r in names]
     batter_data = pd.DataFrame(get_pitcher_data(names, league=league))
     extra_batter_data = pd.DataFrame(basic_pitch_calcs(names, league=league))
-    for batter in batter_data:
-        if batter['IP'] < 3:
-            batter_data.remove(batter)
-    merged_data = pd.merge(batter_data, extra_batter_data, left_on='pitcher_name', right_on='name')
+    merged_data = pd.merge(batter_data, extra_batter_data, left_on='name', right_on='name')
     ranked_players = rank_players(merged_data)
-    count = 1
-    for player in ranked_players[:30]:
-        print(f"{count}. {player['pitcher_name']}, Score: {player['score']}")
-        count += 1
+    for count, (index, row) in enumerate(ranked_players.head(30).iterrows(), start=1):
+        print(f"{count}. {row['name']}, Score: {row['score']}")
 
 
 if __name__ == "__main__":
