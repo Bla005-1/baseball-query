@@ -63,7 +63,8 @@ def basic_pitch_calcs(name: str | List[str], league: str = None, dates: Tuple[st
             SUM(home_runs) AS home_runs,
             SUM(at_bats) AS at_bats,
             SUM(balls) AS balls,
-            SUM(strikes) AS strikes
+            SUM(strikes) AS strikes,
+            GROUP_CONCAT(pitches_thrown) AS cumulative_pitches
         FROM pitchers
     '''
     builder = QueryBuilder(query)
@@ -72,7 +73,7 @@ def basic_pitch_calcs(name: str | List[str], league: str = None, dates: Tuple[st
     builder.finish_query()
     calcs = select_data(builder.get_query(), builder.get_args())
     for i, c in enumerate(calcs):
-        calcs[i] = {k: round(v, 3) if not isinstance(v, str) else v for k, v in c.items()}
+        calcs[i] = {k: round(v or 0, 3) if not isinstance(v, str) else v for k, v in c.items()}
     if len(calcs) == 1:
         return calcs[0]
     return calcs
