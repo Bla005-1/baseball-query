@@ -95,7 +95,8 @@ def get_pitcher_data(name: str | List[str], league: str = None, game_type: str =
                 SUM(pitches_thrown) AS pitches_thrown,
                 SUM(strike_outs) AS strike_outs,
                 SUM(base_on_balls) AS walks,
-                SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k_bb
+                (CAST(SUM(strike_outs) AS REAL) / SUM(batters_faced)) - 
+                (CAST(SUM(base_on_balls) AS REAL) / SUM(batters_faced)) AS k-bb
             FROM pitchers
             '''
     builder1 = QueryBuilder(pitch_query1)

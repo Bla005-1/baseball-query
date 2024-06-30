@@ -6,5 +6,6 @@ __pycache__
 *.json
 *.db-shm
 *.db-wal
+*top_100*
 last_update.txt
 baseball_env
