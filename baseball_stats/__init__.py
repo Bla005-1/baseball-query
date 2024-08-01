@@ -1,0 +1,11 @@
+from .batter_data import get_batter_data
+from .pitch_data import get_pitcher_data
+from .utils import create_league_average_table
+from .db import daily_update, create_table
+from .static_data import *
+
+create_table('all_plays', db_keys)
+create_table('hitters', hitter_db_keys)
+create_table('pitchers', pitcher_db_keys)
+create_table('fielders', fielder_db_keys)
+create_league_average_table()
