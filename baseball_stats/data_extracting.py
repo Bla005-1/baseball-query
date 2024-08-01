@@ -1,6 +1,6 @@
-from static_data import reversed_sport_ids
-from utils import camel_to_snake
-from static_data import db_keys, game_types
+from .static_data import reversed_sport_ids
+from .utils import camel_to_snake
+from .static_data import db_keys, game_types
 
 
 unwanted_keys = ['call', 'matchup', 'pitchIndex', 'actionIndex', 'runnerIndex', 'runners', 'playEvents',

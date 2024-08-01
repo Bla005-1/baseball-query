@@ -6,8 +6,8 @@ import time
 import threading
 import logging
 from tqdm import tqdm
-from static_data import sport_ids, all_leagues
-from data_extracting import extract_all_plays, extract_player_stats
+from .static_data import sport_ids, all_leagues
+from .data_extracting import extract_all_plays, extract_player_stats
 log = logging.getLogger()
 
 '''
