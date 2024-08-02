@@ -24,16 +24,21 @@ def get_pitcher_data(name: str | List[str] = None, metrics: List[str] = default_
         b.add_name(name)
         b.add_all_but_name(league, dates, year, game_type)
         b.finish_query()
-    combined_data = get_combined_data(builder1, builder2)
-    if combined_data.empty:
-        return combined_data
+    rows = get_combined_data(builder1, builder2)
+    if rows.empty:
+        return rows
+    processed_rows = process_pitcher_rows(rows, metrics)
+    return processed_rows
+
+
+def process_pitcher_rows(df: pd.DataFrame, metrics: List[str]) -> pd.DataFrame:
     if any(m in requires_pitch_results for m in set(metrics)):
-        pitch_results_split = combined_data['pitch_results'].str.split(',')
+        pitch_results_split = df['pitch_results'].str.split(',')
         percents = pitch_results_split.apply(pitcher_per_pitch_calcs)
         percents_df = pd.DataFrame(percents.tolist())
-        combined_data = pd.concat([combined_data.drop(columns=['pitch_results']), percents_df], axis=1)
-
-    return combined_data
+        combined_data = pd.concat([df.drop(columns=['pitch_results']), percents_df], axis=1)
+        return combined_data
+    return df
 
 
 def pitcher_per_pitch_calcs(pitch_results: List[str]):

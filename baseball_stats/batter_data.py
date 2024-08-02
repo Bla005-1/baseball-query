@@ -26,7 +26,7 @@ def get_batter_data(name: str | List[str] = None, metrics: List[str] = default_m
     rows = get_combined_data(builder1, builder2)
     if rows.empty:
         return rows
-    processed_rows = process_batter_rows(rows, metrics)  # LEFT OFF HERE
+    processed_rows = process_batter_rows(rows, metrics)
     return processed_rows
 
 
