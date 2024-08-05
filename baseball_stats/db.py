@@ -21,12 +21,6 @@ from .pitch_data import get_pitcher_data, add_pitcher_league_averages, pitcher_p
 from .static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys, sport_ids, all_leagues
 
 
-# date format is 2023-08-04
-logging.basicConfig(
-    filename=os.path.join(DB_DIR, 'daily_update.log'),
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
 log = logging.getLogger()
 debug = DebugManager()
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
