@@ -11,11 +11,11 @@ import traceback
 import logging
 from typing import *
 from tqdm import tqdm
-from https import get_plays, get_pks_over_time
 from queue import Queue
 from gspread_dataframe import set_with_dataframe
 from google.oauth2.service_account import Credentials
-from utils import DebugManager, connect, select_data, DB_DIR
+from .utils import DebugManager, connect, select_data, DB_DIR
+from .https import get_plays, get_pks_over_time
 from .batter_data import get_batter_data, add_batter_league_averages
 from .pitch_data import get_pitcher_data, add_pitcher_league_averages, pitcher_per_pitch_calcs
 from .static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys, sport_ids, all_leagues
