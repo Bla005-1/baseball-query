@@ -89,7 +89,6 @@ class QueryBuilder:
         if self.name is None:
             self.group_by.append(self.name_column)
         if self.group_by:
-            print(self.group_by)
             self.base_query += f' GROUP BY {", ".join(self.group_by)}'
         if self.order is not None:
             self.base_query += self.order
@@ -108,31 +107,40 @@ class QueryBuilder:
 
 
 class TotalsBuilder(QueryBuilder):
-    def __init__(self, metrics: List[str], player_type: str):
+    def __init__(self, metrics: List[str], player_type: str, add_default=True):
         super().__init__()
-        metrics = list(metrics)
-        for default_metric in ('name', 'league', 'player_id'):
-            if default_metric not in metrics:
-                metrics.append(default_metric)
+        self.init_metrics = list(metrics)
+        empty = 0
+        if add_default:
+            empty += 3
+            self.defaults()
         self.metrics = []
         self.name_column = 'name'
-        for m in metrics:
+        for m in self.init_metrics:
             if m in total_metrics.keys():
                 self.metrics.append(total_metrics[m])
-        if len(self.metrics) > 3:
+        if len(self.metrics) > empty:
             self.empty = False
         self.base_query += ', '.join(set(self.metrics))
         self.base_query += f' FROM {player_type} '
 
+    def defaults(self):
+        for default_metric in ('name', 'league', 'player_id'):
+            if default_metric not in self.init_metrics:
+                self.init_metrics.append(default_metric)
+
 
 class PlaysBuilder(QueryBuilder):
-    def __init__(self, metrics: List[str], name_column=None):
+    def __init__(self, metrics: List[str], name_column=None, add_default=True):
         super().__init__()
         if name_column:
             self.name_column = name_column
         metrics = list(metrics)
-        if 'league' not in metrics:
-            metrics.append('league')
+        empty = 0
+        if add_default:
+            empty += 1
+            if 'league' not in metrics:
+                metrics.append('league')
         self.metrics = []
         for m in metrics:
             if m in play_metrics.keys():
@@ -147,7 +155,7 @@ class PlaysBuilder(QueryBuilder):
                 self.name_column = m
             elif m == 'batter_name':
                 self.name_column = m
-        if len(self.metrics) > 1:
+        if len(self.metrics) > empty:
             self.empty = False
         self.base_query += ', '.join(set(self.metrics))
         self.base_query += ' FROM all_plays '
