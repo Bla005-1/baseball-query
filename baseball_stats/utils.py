@@ -137,10 +137,11 @@ class PlaysBuilder(QueryBuilder):
             self.name_column = name_column
         metrics = list(metrics)
         empty = 0
-        if add_default:
-            empty += 1
-            if 'league' not in metrics:
+        if 'league' not in metrics:
+            if add_default:
                 metrics.append('league')
+        else:
+            empty += 1
         self.metrics = []
         for m in metrics:
             if m in play_metrics.keys():
