@@ -152,8 +152,10 @@ class PlaysBuilder(QueryBuilder):
             elif m in requires_pitch_results:
                 self.metrics.append(play_metrics['pitch_results'])
             if m == 'pitcher_name':
+                empty += 1
                 self.name_column = m
             elif m == 'batter_name':
+                empty += 1
                 self.name_column = m
         if len(self.metrics) > empty:
             self.empty = False
