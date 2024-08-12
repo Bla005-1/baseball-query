@@ -32,6 +32,8 @@ class QueryBuilder:
                 name = [f'"{x}"' for x in name]
                 self.where.append(f'{self.name_column} IN ({", ".join(name)})')
                 self.group_by.append(self.name_column)
+        else:
+            self.group_by.append(self.name_column)
         return self
 
     def add_all_but_name(self, league: str | List[str] = None, dates=None, year: str = None, game_type: str = None):
@@ -86,8 +88,6 @@ class QueryBuilder:
             self.base_query += 'WHERE ' + self.where[0]
         elif len(self.where) > 1:
             self.base_query += 'WHERE ' + ' AND '.join(self.where)
-        if self.name is None:
-            self.group_by.append(self.name_column)
         if self.group_by:
             self.base_query += f' GROUP BY {", ".join(self.group_by)}'
         if self.order is not None:
