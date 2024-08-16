@@ -86,12 +86,12 @@ class QueryBuilder:
     def extra_where(self, column: str, values: str | List[str]):
         if isinstance(values, list):
             if len(values) == 1:
-                self.where.append(f'{column} = {values[0]}')
+                self.where.append(f'{column} = "{values[0]}"')
             else:
                 self.where.append(f'{column} IN ({", ".join("?" * len(values))})')
             self.args.extend(values)
         else:
-            self.where.append(f'{column} = {values}')
+            self.where.append(f'{column} = "{values}"')
             self.args.append(values)
             
     def finish_query(self):
