@@ -1,7 +1,7 @@
 import math
 import pandas as pd
 from typing import *
-from .utils import TotalsBuilder, PlaysBuilder
+from .queries import TotalsBuilder, PlaysBuilder
 from .common_data import insert_league_averages, get_combined_data
 from .static_data import requires_pitch_results
 
