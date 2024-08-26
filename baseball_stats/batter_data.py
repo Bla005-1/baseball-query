@@ -1,7 +1,7 @@
 from typing import *
 import pandas as pd
 import numpy as np
-from .utils import PlaysBuilder, TotalsBuilder
+from .queries import PlaysBuilder, TotalsBuilder
 from .common_data import insert_league_averages, get_combined_data, is_contact, is_swing, is_barreled
 
 default_metrics = ('batter_name', 'league', 'pitches', 'zones', 'pitch_results', 'bip', 'percentile_90',

@@ -9,3 +9,5 @@ __pycache__
 *top_100*
 last_update.txt
 baseball_env
+baseball_stats.egg-info
+build

@@ -4,32 +4,24 @@ import sqlite3
 import threading
 import datetime as dt
 import time
-import pandas as pd
-import gspread
 import os
 import traceback
 import logging
 from typing import *
 from tqdm import tqdm
 from queue import Queue
-from gspread_dataframe import set_with_dataframe
-from google.oauth2.service_account import Credentials
-from .utils import DebugManager, connect, select_data, DB_DIR
+from .utils import DebugManager, connect, DB_DIR
 from .https import get_plays, get_pks_over_time
-from .batter_data import get_batter_data, add_batter_league_averages
-from .pitch_data import get_pitcher_data, add_pitcher_league_averages, pitcher_per_pitch_calcs
-from .static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys, sport_ids, all_leagues
+from .batter_data import add_batter_league_averages
+from .pitch_data import add_pitcher_league_averages
+from .static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys, sport_ids
 
 
 log = logging.getLogger()
 debug = DebugManager()
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets',
-          'https://www.googleapis.com/auth/drive']
 
 data_queue = Queue(maxsize=120)
 failed_queue = Queue()
-
-google = os.environ.get('GOOGLE', False)
 
 
 def create_table(table: str, key_relation: Dict) -> None:
@@ -49,39 +41,6 @@ def create_table(table: str, key_relation: Dict) -> None:
         cursor.execute(index_query.replace('blank', idx))
     conn.commit()
     conn.close()
-
-
-# p.hit_speed IS NOT NULL AND
-def get_initial_data(game_type: str) -> Tuple[List, List, List]:
-    year = '2024'
-    batter_metrics = ['batter_name', 'league', 'pitches', 'bip', 'percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle',
-                      'contact_percent', 'zone_contact', 'chase_percent', 'swing_percent', 'zone_swing_percent',
-                      'barrel_per_bbe']
-    batter_df = get_batter_data(metrics=batter_metrics, league=all_leagues, game_type=game_type, year=year)
-    pitcher_metrics = ['league', 'pitcher_name', 'count', 'batters_faced', 'pitches_thrown', 'strike_outs', 'walks',
-                       'k_bb', 'strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
-    overall_pitcher_df = get_pitcher_data(metrics=pitcher_metrics, league=all_leagues, game_type=game_type, year=year)
-    pitch_query = '''
-        SELECT league, 
-            pitcher_name, 
-            pitch_name, 
-            COUNT(*) AS count,
-            AVG(CAST(start_speed AS REAL)) AS avg_velo,
-            MAX(CAST(start_speed AS REAL)) AS max_velo,
-            AVG(CAST(spin_rate AS REAL)) AS avg_spin,
-            AVG(CAST(pfx_z AS REAL)) AS v_break,
-            AVG(CAST(pfx_x AS REAL)) AS h_break,
-            GROUP_CONCAT(pitch_result) AS pitch_results
-        FROM all_plays 
-        WHERE game_type = ? AND date LIKE ?
-        GROUP BY league, pitcher_id, pitch_name
-        '''
-    pitch_data = pd.DataFrame(select_data(pitch_query, [game_type, year+'%']))
-    pitch_results_split = pitch_data['pitch_results'].str.split(',')
-    percents = pitch_results_split.apply(pitcher_per_pitch_calcs)
-    percents_df = pd.DataFrame(percents.tolist())
-    pitcher_df = pd.concat([pitch_data.drop(columns=['pitch_results']), percents_df], axis=1)
-    return batter_df, pitcher_df, overall_pitcher_df
 
 
 def retrieve_data(pk_dict: Dict) -> None:
@@ -212,33 +171,6 @@ def initialize_threads(pk_dict: Dict[str, List[int]]) -> None:
     if failed:
         with open('failed.json', 'w') as f:
             json.dump(failed, f)
-    print(' ')
-
-
-def write_to_sheet(df: pd.DataFrame, key: str, sheet: str = 'Sheet1') -> None:
-    credentials = Credentials.from_service_account_file(os.path.join(DB_DIR, 'baseball-stats-394502-c0dd81e75f98.json'),
-                                                        scopes=SCOPES)
-
-    gc = gspread.authorize(credentials)
-
-    gs = gc.open_by_key(key)
-    worksheet1 = gs.worksheet(sheet)
-    worksheet1.clear()
-    set_with_dataframe(worksheet=worksheet1, dataframe=df, include_index=False,
-                       include_column_header=True, resize=True)
-
-
-def add_to_google():
-    batt, pitch, pitch_overall = get_initial_data('R')
-    if len(batt) != 0 or len(pitch) != 0:
-        print('adding regular to drive')
-        batt_regular = '1dyrqFVcnK9034WZHwKmPCLgopqhgeucvwjSD38pTE2Q'
-        pitch_regular = '1BdpuSnjGqYZp6RypI-z2NSST1REJsusM42dSkOk-bxc'
-        pitch_overall_regular = '1G6fGNiRaxfjBrwHXQU9JEU8awjQYPZHoq_xFc0_574M'
-        write_to_sheet(batt, batt_regular)
-        write_to_sheet(pitch, pitch_regular)
-        write_to_sheet(pitch_overall, pitch_overall_regular)
-    write_last_update()
 
 
 def write_last_update() -> None:
@@ -256,30 +188,15 @@ def daily_update(start_date: None | dt.date | str = None, do_google: bool = True
             start_date = dt.date.today() - dt.timedelta(days=1)
         start_date = start_date - dt.timedelta(days=1)
     log.info(f'Using {start_date} as the beginning of new requests')
-    print(f'Using {start_date} as the beginning of new requests')
     the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)
     initialize_threads(the_pk_dict)
-    print(debug)
+    log.info(debug)
     try:
         for key in sport_ids.keys():
             add_batter_league_averages(key)
             add_pitcher_league_averages(key)
         log.info('Added league averages')
-        print('Added league averages')
     except Exception:
         log.error('Error with league averages:', exc_info=True)
         traceback.print_exc()
-    batt, pitch, pitch_overall = get_initial_data('R')
-    print(batt)
-    if do_google:
-        try:
-            add_to_google()
-            log.info('Successfully added to google')
-            print('Complete')
-        except Exception:
-            log.error('Error with google:', exc_info=True)
-            traceback.print_exc()
-            write_last_update()
-            exit(1)
-    else:
-        write_last_update()
+    write_last_update()

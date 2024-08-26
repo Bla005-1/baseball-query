@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from .utils import connect, QueryBuilder, select_data
+from .utils import connect, select_data
+from .queries import QueryBuilder
 from typing import *
 
 all_swings = ['Foul', 'Foul Bunt', 'Foul Tip Bunt', 'Foul Pitchout', 'Missed Bunt', 'Foul Tip',

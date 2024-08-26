@@ -8,13 +8,8 @@ import logging
 from tqdm import tqdm
 from .static_data import sport_ids, all_leagues
 from .data_extracting import extract_all_plays, extract_player_stats
-log = logging.getLogger()
 
-'''
-MAJOR CHANGE
-going to request from mlb instead of baseball savant.
-https://statsapi.mlb.com/api/v1.1/game/751428/feed/live
-'''
+log = logging.getLogger()
 
 BASE_URL = 'https://statsapi.mlb.com/api/v1.1/game/'
 

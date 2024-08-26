@@ -1,9 +1,6 @@
 numpy~=1.25.0
 pandas~=2.0.3
-gspread~=5.10.0
 tqdm~=4.65.0
-google~=3.0.0
 requests~=2.31.0
 connexion~=3.0.6
-gspread-dataframe
 scikit-learn
