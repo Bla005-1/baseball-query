@@ -7,7 +7,7 @@ from .static_data import requires_pitch_results
 
 
 default_metrics = ('pitcher_name', 'name', 'league', 'count', 'pitch_results', 'batters_faced', 'pitches_thrown',
-                   'strike_outs', 'walks', 'k_bb')
+                   'strike_outs', 'walks', 'k_min_bb')
 
 
 def add_pitcher_league_averages(league: str):

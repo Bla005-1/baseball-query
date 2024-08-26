@@ -5,7 +5,7 @@ from .queries import PlaysBuilder, TotalsBuilder
 from .common_data import insert_league_averages, get_combined_data, is_contact, is_swing, is_barreled
 
 default_metrics = ('batter_name', 'league', 'pitches', 'zones', 'pitch_results', 'bip', 'percentile_90',
-                   'launch_angles', 'avg_ev', 'max_ev', 'avg_hit_angle', 'barrel_per_bbe')
+                   'launch_angles', 'avg_ev', 'max_ev', 'avg_hit_angle', 'barrel_per_bbe', 'contact_percent')
 
 
 def add_batter_league_averages(league: str):
@@ -59,6 +59,8 @@ def process_batter_rows(df: pd.DataFrame, metrics: List[str]) -> pd.DataFrame:
 
 
 def calculate_barrel_percent(angles: List[str], speeds: List[str]) -> float:
+    if not angles and not speeds:
+        return 0
     angles = [float(x) for x in angles]
     speeds = [float(x) for x in speeds]
     count_barreled = sum(is_barreled(launch_angle, exit_velocity) for launch_angle, exit_velocity in zip(angles, speeds))

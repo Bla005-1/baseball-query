@@ -350,6 +350,7 @@ play_metrics = {
     'batter_name': 'batter_name AS name, batter_id AS player_id',
     'league': 'league',
     'pitch_name': 'pitch_name',
+    'pitches': 'COUNT(*) AS pitches',
     'count': 'COUNT(*) AS count',
     'pitch_results': 'GROUP_CONCAT(pitch_result) AS pitch_results',
     'hit_speeds': 'GROUP_CONCAT(launch_speed) AS hit_speeds',
