@@ -18,12 +18,11 @@ def add_pitcher_league_averages(league: str):
 
 def get_pitcher_data(name: str | List[str] = None, metrics: List[str] = default_metrics, league: str | List[str] = None,
                      game_type: str = 'R', dates: Tuple[str, str] = None, year: str = '2024') -> pd.DataFrame:
-    builder1 = PlaysBuilder(metrics)
-    builder2 = TotalsBuilder(metrics, 'pitchers')
+    builder1 = PlaysBuilder(metrics, 'pitcher')
+    builder2 = TotalsBuilder(metrics, 'pitcher')
     for b in (builder1, builder2):
         b.add_name(name)
         b.add_all_but_name(league, dates, year, game_type)
-        b.finish_query()
     rows = get_combined_data(builder1, builder2)
     if rows.empty:
         return rows

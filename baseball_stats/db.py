@@ -178,7 +178,7 @@ def write_last_update() -> None:
         last_update.write(str(dt.date.today()))
 
 
-def daily_update(start_date: None | dt.date | str = None, do_google: bool = True) -> None:
+def daily_update(start_date: None | dt.date | str = None) -> None:
     if start_date is None:
         try:
             with open(os.path.join(DB_DIR, 'last_update.txt'), 'r') as last_update:

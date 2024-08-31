@@ -17,12 +17,11 @@ def add_batter_league_averages(league: str):
 
 def get_batter_data(name: str | List[str] = None, metrics: List[str] = default_metrics, league: str | List[str] = None,
                     game_type: str = 'R', dates: Tuple[str, str] = None, year: str = '2024') -> pd.DataFrame:
-    builder1 = PlaysBuilder(metrics, 'batter_name')
-    builder2 = TotalsBuilder(metrics, 'hitters')
+    builder1 = PlaysBuilder(metrics, 'batter')
+    builder2 = TotalsBuilder(metrics, 'batter')
     for b in (builder1, builder2):
         b.add_name(name)
         b.add_all_but_name(league, dates, year, game_type)
-        b.finish_query()
     rows = get_combined_data(builder1, builder2)
     if rows.empty:
         return rows
@@ -31,6 +30,8 @@ def get_batter_data(name: str | List[str] = None, metrics: List[str] = default_m
 
 
 def process_batter_rows(df: pd.DataFrame, metrics: List[str]) -> pd.DataFrame:
+    if 'OBS' in metrics:
+        df['OBS'] = df['OBP'] + df['SLG']
     metric_functions = {
         'barrel_per_bbe': calculate_barrel,
         'percentile_90': calculate_percentile,
@@ -63,19 +64,22 @@ def calculate_barrel_percent(angles: List[str], speeds: List[str]) -> float:
         return 0
     angles = [float(x) for x in angles]
     speeds = [float(x) for x in speeds]
-    count_barreled = sum(is_barreled(launch_angle, exit_velocity) for launch_angle, exit_velocity in zip(angles, speeds))
+    count_barreled = sum(is_barreled(launch_angle, exit_velocity) for launch_angle, exit_velocity in
+                         zip(angles, speeds))
     return (count_barreled / len(angles)) * 100 if angles else 0
 
 
 def calculate_barrel(df: pd.DataFrame) -> pd.DataFrame:
     df['hit_speeds'] = df['hit_speeds'].str.split(',')
     df['launch_angles_list'] = df['launch_angles'].str.split(',')
-    df['barrel_per_bbe'] = df.apply(lambda row: calculate_barrel_percent(row['launch_angles_list'], row['hit_speeds']), axis=1)
+    df['barrel_per_bbe'] = df.apply(lambda row: calculate_barrel_percent(row['launch_angles_list'], row['hit_speeds']),
+                                    axis=1)
     return df['barrel_per_bbe']
 
 
 def calculate_percentile(df: pd.DataFrame) -> pd.DataFrame:
-    df['percentile_90'] = df['hit_speeds'].apply(lambda x: np.percentile([float(i) for i in x.split(',') if i], 90) if x else 0)
+    df['percentile_90'] = df['hit_speeds'].apply(lambda x: np.percentile([float(i) for i in x.split(',') if i],
+                                                                         90) if x else 0)
     return df['percentile_90']
 
 

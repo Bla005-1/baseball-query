@@ -11,14 +11,14 @@ all_swings = ['Foul', 'Foul Bunt', 'Foul Tip Bunt', 'Foul Pitchout', 'Missed Bun
 def get_combined_data(query1: QueryBuilder, query2: QueryBuilder, merge_on=('name', 'player_id', 'league')
                       ) -> pd.DataFrame:
     if query1 and query2:
-        data1 = select_data(query1.get_query(), query1.get_args())
-        data2 = select_data(query2.get_query(), query2.get_args())
+        data1 = select_data(query1.finish_query(), query1.get_args())
+        data2 = select_data(query2.finish_query(), query2.get_args())
         df = pd.merge(pd.DataFrame(data1), pd.DataFrame(data2), on=merge_on)
     elif query1:
-        data1 = select_data(query1.get_query(), query1.get_args())
+        data1 = select_data(query1.finish_query(), query1.get_args())
         df = pd.DataFrame(data1)
     elif query2:
-        data2 = select_data(query2.get_query(), query2.get_args())
+        data2 = select_data(query2.finish_query(), query2.get_args())
         df = pd.DataFrame(data2)
     else:
         raise 'No metrics provided'

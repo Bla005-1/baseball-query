@@ -3,6 +3,7 @@ from .pitch_data import get_pitcher_data, process_pitcher_rows
 from .common_data import get_combined_data
 from .utils import create_league_average_table
 from .queries import QueryBuilder, PlaysBuilder, TotalsBuilder
+from .baseball_query import BaseballQuery
 from .db import daily_update, create_table
 from .static_data import *
 
