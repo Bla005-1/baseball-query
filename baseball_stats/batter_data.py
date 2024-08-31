@@ -92,6 +92,8 @@ def calculate_contacts(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def calculate_contacts_metrics(pitch_results: List[str], zones: List[str]) -> Dict[str, float]:
+    if not zones:
+        zones = [0]
     zones = [int(x) if x else 0 for x in zones]
     if len(zones) < len(pitch_results):
         zones.extend([0] * (len(pitch_results) - len(zones)))
