@@ -1,6 +1,6 @@
 from typing import *
 from .common_data import get_combined_data
-from .static_data import *
+from .builder_metrics import *
 from .queries import TotalsBuilder, PlaysBuilder
 from .batter_data import process_batter_rows
 from .pitch_data import process_pitcher_rows
@@ -34,31 +34,26 @@ class BaseballQuery:
             elif group == 'name':
                 group = 'player_id'
                 self.groups[i] = group
-            self.total_query.extra_group(group)
-            self.play_query.extra_group(group)
+            self.total_query.add_group_column(group)
+            if group == 'team_name':
+                group = self.play_query.team_column
 
-    def add_where_and_group(self, column, value):  # for user defined columns
-        if value:
-            for build in (self.total_query, self.play_query):
-                if column == 'name':
-                    build.add_name(value)
-                elif column == 'team_name':
-                    build.add_team(value)
-                else:
-                    build.extra_where(column, value)
-                if column not in self.groups:
-                    build.extra_group(column)
-                    self.groups.append(column)
+            self.play_query.add_group_column(group)
 
-    def extra_group(self, column):
+    def add_where_and_group(self, column: str, value: str | List[str]):  # for user defined columns
+        self.add_filters({column: value})
+        self.add_group_column(column)
+
+    def add_group_column(self, column):
         if column not in self.groups:
-            self.total_query.extra_group(column)
+            self.total_query.add_group_column(column)
+            self.groups.append(column)
             if column == 'name':
                 column = self.play_query.name_column
             elif column == 'team_name':
                 column = self.play_query.team_column
-            self.play_query.extra_group(column)
-            self.groups.append(column)
+            self.play_query.add_group_column(column)
+
 
     def order_by(self, column):
         self.total_query.order_by(column)
@@ -78,8 +73,12 @@ class BaseballQuery:
                         continue
                     elif column == 'year':
                         build.add_year(values)
+                    elif column == 'name':
+                        build.add_name(values)
+                    elif column == 'team_name':
+                        build.add_team(values)
                     else:
-                        build.extra_where(column, values)
+                        build.add_dynamic_where(column, values)
 
     def get_merge(self):
         return self.groups

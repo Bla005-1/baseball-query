@@ -343,38 +343,6 @@ fielder_db_keys = {
     'team_id': 'INTEGER',
     'team_abbr': 'TEXT'
 }
-requires_pitch_results = ['strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent', 'pitch_results']
-
-play_metrics = {
-    'pitcher_name': 'pitcher_name AS name, pitcher_id AS player_id',
-    'batter_name': 'batter_name AS name, batter_id AS player_id',
-    'team_fielding': 'team_fielding AS team_name',
-    'team_batting': 'team_batting AS team_name',
-    'league': 'league',
-    'pitch_name': 'pitch_name',
-    'pitches': 'COUNT(*) AS pitches',
-    'count': 'COUNT(*) AS count',
-    'pitch_results': 'GROUP_CONCAT(pitch_result) AS pitch_results',
-    'hit_speeds': 'GROUP_CONCAT(launch_speed) AS hit_speeds',
-    'percentile_90': 'GROUP_CONCAT(launch_speed) AS hit_speeds',
-    'launch_angles': 'GROUP_CONCAT(launch_angle) AS launch_angles',
-    'avg_ev': 'AVG(CAST(launch_speed AS REAL)) AS avg_ev',
-    'max_ev': 'MAX(CAST(launch_speed AS REAL)) AS max_ev',
-    'avg_hit_angle': 'AVG(CAST(launch_angle AS REAL)) AS avg_hit_angle',
-    'bip': 'SUM(CASE WHEN pitch_result LIKE "%play%" THEN 1 ELSE 0 END) AS bip',
-    'zones': 'GROUP_CONCAT(IFNULL(zone, 0)) as zones',
-    'barrel_per_bbe': ['GROUP_CONCAT(launch_speed) AS hit_speeds', 'GROUP_CONCAT(launch_angle) AS launch_angles'],
-    'contact_percent': ['GROUP_CONCAT(pitch_result) AS pitch_results', 'GROUP_CONCAT(IFNULL(zone, 0)) as zones'],
-    'zone_contact': ['GROUP_CONCAT(pitch_result) AS pitch_results', 'GROUP_CONCAT(IFNULL(zone, 0)) as zones'],
-    'chase_percent': ['GROUP_CONCAT(pitch_result) AS pitch_results', 'GROUP_CONCAT(IFNULL(zone, 0)) as zones'],
-    'swing_percent': ['GROUP_CONCAT(pitch_result) AS pitch_results', 'GROUP_CONCAT(IFNULL(zone, 0)) as zones'],
-    'zone_swing_percent': ['GROUP_CONCAT(pitch_result) AS pitch_results', 'GROUP_CONCAT(IFNULL(zone, 0)) as zones'],
-    'avg_velo': 'AVG(CAST(start_speed AS REAL)) AS avg_velo',
-    'max_velo': 'MAX(CAST(start_speed AS REAL)) AS max_velo',
-    'avg_spin': 'AVG(CAST(spin_rate AS REAL)) AS avg_spin',
-    'v_break': 'AVG(CAST(pfx_z AS REAL)) AS v_break',
-    'h_break': 'AVG(CAST(pfx_x AS REAL)) AS h_break',
-}
 
 # might be old now
 total_metrics = {
@@ -391,90 +359,6 @@ total_metrics = {
     'predicted_pitches': 'GROUP_CONCAT(pitches_thrown) AS cumulative_pitches',
 }
 
-totals_common = {
-    'game_pk': 'game_pk',
-    'name': 'name, player_id',
-    'league': 'league',
-    'games_played': 'SUM(games_played) AS games_played',
-    'fly_outs': 'SUM(fly_outs) AS fly_outs',
-    'ground_outs': 'SUM(ground_outs) AS ground_outs',
-    'runs': 'SUM(runs) AS runs',
-    'doubles': 'SUM(doubles) AS doubles',
-    'triples': 'SUM(triples) AS triples',
-    'home_runs': 'SUM(home_runs) AS home_runs',
-    'air_outs': 'SUM(air_outs) AS air_outs',
-    'strike_outs': 'SUM(strike_outs) AS strike_outs',
-    'base_on_balls': 'SUM(base_on_balls) AS base_on_balls',
-    'intentional_walks': 'SUM(intentional_walks) AS intentional_walks',
-    'walks': 'SUM(base_on_balls) + SUM(intentional_walks) AS walks',
-    'hits': 'SUM(hits) AS hits',
-    'hit_by_pitch': 'SUM(hit_by_pitch) AS hit_by_pitch',
-    'at_bats': 'SUM(at_bats) AS at_bats',
-    'caught_stealing': 'SUM(caught_stealing) AS caught_stealing',
-    'stolen_bases': 'SUM(stolen_bases) AS stolen_bases',
-    'sac_bunts': 'SUM(sac_bunts) AS sac_bunts',
-    'sac_flies': 'SUM(sac_flies) AS sac_flies',
-    'pickoffs': 'SUM(pickoffs) AS pickoffs',
-    'pop_outs': 'SUM(pop_outs) AS pop_outs',
-    'line_outs': 'SUM(line_outs) AS line_outs',
-}
 
-totals_batter_metrics = {
-    'ground_into_double_play': 'SUM(ground_into_double_play) AS ground_into_double_play',
-    'ground_into_triple_play': 'SUM(ground_into_triple_play) AS ground_into_triple_play',
-    'plate_appearances': 'SUM(plate_appearances) AS plate_appearances',
-    'total_bases': 'SUM(total_bases) AS total_bases',
-    'rbi': 'SUM(rbi) AS rbi',
-    'left_on_base': 'SUM(left_on_base) AS left_on_base',
-    'catchers_interference': 'SUM(catchers_interference) AS catchers_interference',
-    'batting_average': 'CAST(SUM(hits) AS REAL) / SUM(at_bats) AS batting_average',
-    'strikeout_rate': 'CAST(SUM(strike_outs) AS REAL) / SUM(at_bats) AS strikeout_rate',
-    'walk_rate': 'CAST(SUM(base_on_balls) AS REAL) / SUM(at_bats) AS walk_rate',
-    'SLG': ' CAST(SUM(hits) - SUM(doubles) - SUM(triples) - SUM(home_runs) + (2 * SUM(doubles)) + (3 * SUM(triples)) + '
-           '(4 * SUM(home_runs)) AS REAL) / SUM(at_bats) AS SLG',
-    'OBP': 'CAST(SUM(hits) + SUM(base_on_balls) + SUM(intentional_walks) + SUM(hit_by_pitch) AS REAL) / '
-           'SUM(plate_appearances) AS OBP',
-}
-totals_batter_metrics['OBS'] = [totals_batter_metrics['OBP'], totals_batter_metrics['SLG']]
 
-totals_pitcher_metrics = {
-    'ERA': '9 * SUM(earned_runs) / SUM(innings_pitched) AS ERA',
-    'games_started': 'SUM(games_started) AS games_started',
-    'number_of_pitches': 'SUM(number_of_pitches) AS number_of_pitches',
-    'innings_pitched': 'SUM(innings_pitched) AS innings_pitched',
-    'wins': 'SUM(wins) AS wins',
-    'losses': 'SUM(losses) AS losses',
-    'saves': 'SUM(saves) AS saves',
-    'save_opportunities': 'SUM(save_opportunities) AS save_opportunities',
-    'holds': 'SUM(holds) AS holds',
-    'blown_saves': 'SUM(blown_saves) AS blown_saves',
-    'earned_runs': 'SUM(earned_runs) AS earned_runs',
-    'batters_faced': 'SUM(batters_faced) AS batters_faced',
-    'outs': 'SUM(outs) AS outs',
-    'games_pitched': 'SUM(games_pitched) AS games_pitched',
-    'complete_games': 'SUM(complete_games) AS complete_games',
-    'shutouts': 'SUM(shutouts) AS shutouts',
-    'pitches_thrown': 'SUM(pitches_thrown) AS pitches_thrown',
-    'balls': 'SUM(balls) AS balls',
-    'strikes': 'SUM(strikes) AS strikes',
-    'hit_batsmen': 'SUM(hit_batsmen) AS hit_batsmen',
-    'balks': 'SUM(balks) AS balks',
-    'wild_pitches': 'SUM(wild_pitches) AS wild_pitches',
-    'rbi': 'SUM(rbi) AS rbi',
-    'games_finished': 'SUM(games_finished) AS games_finished',
-    'inherited_runners': 'SUM(inherited_runners) AS inherited_runners',
-    'inherited_runners_scored': 'SUM(inherited_runners_scored) AS inherited_runners_scored',
-    'catchers_interference': 'SUM(catchers_interference) AS catchers_interference',
-    'passed_ball': 'SUM(passed_ball) AS passed_ball',
-    'cumulative_pitches': 'GROUP_CONCAT(pitches_thrown) AS cumulative_pitches',
-    'strikeout_ratio': 'SUM(strike_outs) / SUM(CAST(batters_faced AS REAL)) AS strikeout_ratio',
-    'walk_ratio': 'SUM(base_on_balls) / SUM(CAST(batters_faced AS REAL)) AS walk_ratio',
-    'k_div_bb': 'SUM(strike_outs) / CAST(SUM(base_on_balls) AS REAL) AS k_div_bb',
-    'k_min_bb': '(CAST(SUM(strike_outs) AS REAL) / SUM(batters_faced)) - (CAST(SUM(base_on_balls) AS REAL) / '
-                'SUM(batters_faced)) * 100.0 AS k_min_bb',
-}
 
-grouping_columns = [
-    'name', 'league', 'player_id', 'game_type', 'game_type_name', 'season', 'game_pk', 'team_name', 'date',
-    'pitch_name', 'venue_name', 'city', 'time_zone', 'turf_type', 'weather_condition', 'temp', 'wind'
-]

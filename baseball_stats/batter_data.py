@@ -1,32 +1,10 @@
 from typing import *
 import pandas as pd
 import numpy as np
-from .queries import PlaysBuilder, TotalsBuilder
-from .common_data import insert_league_averages, get_combined_data, is_contact, is_swing, is_barreled
+from .common_data import is_contact, is_swing, is_barreled
 
 default_metrics = ('batter_name', 'league', 'pitches', 'zones', 'pitch_results', 'bip', 'percentile_90',
                    'launch_angles', 'avg_ev', 'max_ev', 'avg_hit_angle', 'barrel_per_bbe', 'contact_percent')
-
-
-def add_batter_league_averages(league: str):
-    keys = ['percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle', 'contact_percent', 'zone_contact',
-            'chase_percent', 'swing_percent', 'zone_swing_percent']
-    data = get_batter_data(None, metrics=keys, league=league)
-    insert_league_averages(league, data.to_dict(orient='records'), keys)
-
-
-def get_batter_data(name: str | List[str] = None, metrics: List[str] = default_metrics, league: str | List[str] = None,
-                    game_type: str = 'R', dates: Tuple[str, str] = None, year: str = '2024') -> pd.DataFrame:
-    builder1 = PlaysBuilder(metrics, 'batter')
-    builder2 = TotalsBuilder(metrics, 'batter')
-    for b in (builder1, builder2):
-        b.add_name(name)
-        b.add_all_but_name(league, dates, year, game_type)
-    rows = get_combined_data(builder1, builder2)
-    if rows.empty:
-        return rows
-    processed_rows = process_batter_rows(rows, metrics)
-    return processed_rows
 
 
 def process_batter_rows(df: pd.DataFrame, metrics: List[str]) -> pd.DataFrame:

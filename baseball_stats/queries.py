@@ -1,5 +1,5 @@
 from typing import List
-from .static_data import *
+from .builder_metrics import *
 
 
 class QueryBuilder:
@@ -14,51 +14,24 @@ class QueryBuilder:
         self.group_by = []
         self.is_finished = False
 
-    def add_name(self, name):
-        if name:
-            if isinstance(name, str) or (isinstance(name, list) and len(name) == 1):
-                self.where.append(f'{self.name_column} = ?')
-                self.args.append(name if isinstance(name, str) else name[0])
-            else:
-                name = [f'"{x}"' for x in name]
-                self.where.append(f'{self.name_column} IN ({", ".join(name)})')
-                self.group_by.append(self.name_column)
-        else:
-            self.group_by.append(self.name_column)
-        return self
+    def add_name(self, name_values):
+        self.add_dynamic_where(self.name_column, name_values)
 
-    def add_team(self, team):
-        if team:
-            if isinstance(team, str) or (isinstance(team, list) and len(team) == 1):
-                self.where.append(f'{self.team_column} = ?')
-                self.args.append(team if isinstance(team, str) else team[0])
-            else:
-                team = [f'"{x}"' for x in team]
-                self.where.append(f'{self.team_column} IN ({", ".join(team)})')
-                self.group_by.append(self.team_column)
-        else:
-            self.group_by.append(self.name_column)
-        return self
-
-    def add_all_but_name(self, league: str | List[str] = None, dates=None, year: str = None,
-                         game_type: str | List[str] = None):
-        self.extra_where('league', league)
-        self.add_dates(dates)
-        self.add_year(year)
-        self.extra_where('game_type', game_type)
+    def add_team(self, team_values):
+        self.add_dynamic_where(self.team_column, team_values)
 
     def add_dates(self, dates):
         if dates is not None:
             if len(dates) == 2:
                 if dates[0] and dates[1]:
-                    self.add_other_where('date BETWEEN ? AND ?', [dates[0], dates[1]])
+                    self.add_raw_where('date BETWEEN ? AND ?', [dates[0], dates[1]])
 
     def add_year(self, year: str):
         if year:
             self.where.append('date LIKE ?')
             self.args.append(year + '%')
 
-    def add_other_where(self, where_clause: str, args: List[str] | str = None):
+    def add_raw_where(self, where_clause: str, args: List[str] | str = None):
         self.where.append(where_clause)
         if isinstance(args, str):
             self.args.append(args)
@@ -68,15 +41,15 @@ class QueryBuilder:
     def order_by(self, column: str):
         self.order.append(column)
 
-    def extra_group(self, column: str | List[str]):
+    def add_group_column(self, column: str | List[str]):
         if isinstance(column, str):
             self.group_by.append(column)
         else:
             self.group_by.extend(column)
 
-    def extra_where(self, column: str, values: str | List[str]):
+    def add_dynamic_where(self, column: str, values: str | List[str]):
         if not values:
-            self.extra_group(column)
+            self.add_group_column(column)
             return
         if isinstance(values, list):
             if len(values) == 1:
@@ -99,9 +72,6 @@ class QueryBuilder:
             self.base_query += f' ORDER BY {", ".join(self.order)}'
         self.is_finished = True
         return self.get_query()
-
-    def add_other(self, clause: str):
-        self.where.append(clause)
 
     def get_query(self):
         return self.base_query

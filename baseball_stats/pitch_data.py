@@ -1,33 +1,11 @@
 import math
 import pandas as pd
 from typing import *
-from .queries import TotalsBuilder, PlaysBuilder
-from .common_data import insert_league_averages, get_combined_data
-from .static_data import requires_pitch_results
+from .builder_metrics import requires_pitch_results
 
 
 default_metrics = ('pitcher_name', 'name', 'league', 'count', 'pitch_results', 'batters_faced', 'pitches_thrown',
                    'strike_outs', 'walks', 'k_min_bb')
-
-
-def add_pitcher_league_averages(league: str):
-    data = get_pitcher_data(None, ['pitch_results', 'pitcher_name'], league=league, game_type='R', year='2024')
-    keys = ['strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
-    insert_league_averages(league, data.to_dict(orient='records'), keys)
-
-
-def get_pitcher_data(name: str | List[str] = None, metrics: List[str] = default_metrics, league: str | List[str] = None,
-                     game_type: str = 'R', dates: Tuple[str, str] = None, year: str = '2024') -> pd.DataFrame:
-    builder1 = PlaysBuilder(metrics, 'pitcher')
-    builder2 = TotalsBuilder(metrics, 'pitcher')
-    for b in (builder1, builder2):
-        b.add_name(name)
-        b.add_all_but_name(league, dates, year, game_type)
-    rows = get_combined_data(builder1, builder2)
-    if rows.empty:
-        return rows
-    processed_rows = process_pitcher_rows(rows, metrics)
-    return processed_rows
 
 
 def process_pitcher_rows(df: pd.DataFrame, metrics: List[str]) -> pd.DataFrame:

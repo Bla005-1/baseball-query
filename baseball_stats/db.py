@@ -7,13 +7,13 @@ import time
 import os
 import traceback
 import logging
+import numpy as np
 from typing import *
 from tqdm import tqdm
 from queue import Queue
 from .utils import DebugManager, connect, DB_DIR
 from .https import get_plays, get_pks_over_time
-from .batter_data import add_batter_league_averages
-from .pitch_data import add_pitcher_league_averages
+from .baseball_query import BaseballQuery
 from .static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys, sport_ids
 
 
@@ -22,6 +22,8 @@ debug = DebugManager()
 
 data_queue = Queue(maxsize=120)
 failed_queue = Queue()
+
+YEAR = dt.date.today().year
 
 
 def create_table(table: str, key_relation: Dict) -> None:
@@ -41,6 +43,53 @@ def create_table(table: str, key_relation: Dict) -> None:
         cursor.execute(index_query.replace('blank', idx))
     conn.commit()
     conn.close()
+
+
+def insert_league_averages(league: str, processed_data: List[Dict], keys: List[str]):
+    arrays = {}
+    for row in processed_data:
+        for key in keys:
+            arrays.setdefault(key, [])
+            arrays[key].append(row[key])
+    args = []
+    insert_query = '''
+                INSERT INTO league_averages (league, metric, mean, stddev) VALUES (?, ?, ?, ?) 
+                ON CONFLICT(league, metric) DO UPDATE SET
+                mean = excluded.mean,
+                stddev = excluded.stddev
+        '''
+    for k, value in arrays.items():
+        value = [v for v in value if v is not None]
+        if len(value) == 0:
+            std_dev = 0
+            avg = 0
+        else:
+            std_dev = np.std(value)
+            avg = sum(value) / len(value)
+        args.append((league, k, avg, std_dev))
+    conn, cursor = connect()
+    cursor.executemany(insert_query, args)
+    conn.commit()
+    conn.close()
+
+
+def add_batter_league_averages(league: str):
+    keys = ['percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle', 'contact_percent', 'zone_contact',
+            'chase_percent', 'swing_percent', 'zone_swing_percent']
+    filters = {'league': league, 'game_type': 'R', 'year': YEAR}
+    bq = BaseballQuery(keys, 'batter')
+    bq.add_filters(filters)
+    data = bq.fetch_data()
+    insert_league_averages(league, data.to_dict(orient='records'), keys)
+
+
+def add_pitcher_league_averages(league: str):
+    keys = ['strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
+    filters = {'league': league, 'game_type': 'R', 'year': YEAR}
+    bq = BaseballQuery(keys, 'pitcher')
+    bq.add_filters(filters)
+    data = bq.fetch_data()
+    insert_league_averages(league, data.to_dict(orient='records'), keys)
 
 
 def retrieve_data(pk_dict: Dict) -> None:
