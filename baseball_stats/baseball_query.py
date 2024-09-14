@@ -54,7 +54,6 @@ class BaseballQuery:
                 column = self.play_query.team_column
             self.play_query.add_group_column(column)
 
-
     def order_by(self, column):
         self.total_query.order_by(column)
         if column == 'name':
@@ -89,7 +88,7 @@ class BaseballQuery:
             return df
         if self.player_type == 'batter':
             return process_batter_rows(df, self.all_metrics)
-        if self.player_type == 'pither':
+        if self.player_type == 'pitcher':
             return process_pitcher_rows(df, self.all_metrics)
 
     def __str__(self):
