@@ -15,7 +15,7 @@ class TestBatterData(unittest.TestCase):
             'SLG': [0.6, 0.5],
             'barrel_per_bbe': [0.1, 0.15]
         })
-        metrics = ['OBP', 'SLG', 'barrel_per_bbe']
+        metrics = ['OBS', 'SLG']
         processed_df = process_batter_rows(df, metrics)
         self.assertIn('OBS', processed_df.columns)
         self.assertEqual(processed_df['OBS'].tolist(), [1.0, 0.85])

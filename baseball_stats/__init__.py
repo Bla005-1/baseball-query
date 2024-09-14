@@ -7,6 +7,7 @@ from .baseball_query import BaseballQuery
 from .db import daily_update, create_table
 from .static_data import *
 from .builder_metrics import *
+from .errors import *
 
 create_table('all_plays', db_keys)
 create_table('hitters', hitter_db_keys)

@@ -1,13 +1,13 @@
 import pandas as pd
 from .utils import select_data
 from .queries import QueryBuilder
+from .errors import *
 
 all_swings = ['Foul', 'Foul Bunt', 'Foul Tip Bunt', 'Foul Pitchout', 'Missed Bunt', 'Foul Tip',
               'Swinging Strike', 'Swinging Strike (Blocked)', 'Swinging Pitchout']
 
 
-def get_combined_data(query1: QueryBuilder, query2: QueryBuilder, merge_on=('name', 'player_id', 'league')
-                      ) -> pd.DataFrame:
+def get_combined_data(query1: QueryBuilder, query2: QueryBuilder, merge_on: tuple) -> pd.DataFrame:
     if query1 and query2:
         data1 = select_data(query1.finish_query(), query1.get_args())
         data2 = select_data(query2.finish_query(), query2.get_args())
@@ -19,11 +19,13 @@ def get_combined_data(query1: QueryBuilder, query2: QueryBuilder, merge_on=('nam
         data2 = select_data(query2.finish_query(), query2.get_args())
         df = pd.DataFrame(data2)
     else:
-        raise 'No metrics provided'
+        raise EmptyQueryError()
+    if df.empty:
+        raise NoDataFoundError(query1=query1, query2=query2)
     return df
 
 
-def is_barreled(launch_angle, exit_velocity):
+def is_barreled(launch_angle: int | float, exit_velocity: int | float) -> bool:
     if exit_velocity < 98:
         return False
     elif exit_velocity == 98:

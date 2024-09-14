@@ -2,6 +2,7 @@ import sqlite3
 import re
 import os
 from typing import List, Iterable, Any
+from .errors import *
 
 home_dir = os.path.expanduser('~')
 db_dir = os.path.join(home_dir, 'baseball_db')
@@ -51,6 +52,8 @@ def select_data(query: str, args: Iterable = None, row_factory=dict_factory) -> 
             cursor.execute(query)
         data = cursor.fetchall()
         return data
+    except Exception as e:
+        raise QueryExecutionError(message=e, query1=query)
     finally:
         conn.close()
 
