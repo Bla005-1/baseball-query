@@ -1,4 +1,5 @@
 from typing import *
+import pandas as pd
 from .common_data import get_combined_data
 from .builder_metrics import *
 from .queries import TotalsBuilder, PlaysBuilder
@@ -40,11 +41,11 @@ class BaseballQuery:
 
             self.play_query.add_group_column(group)
 
-    def add_where_and_group(self, column: str, value: str | List[str]):  # for user defined columns
+    def add_where_and_group(self, column: str, value: str | List[str]) -> None:  # for user defined columns
         self.add_filters({column: value})
         self.add_group_column(column)
 
-    def add_group_column(self, column):
+    def add_group_column(self, column: str) -> None:
         if column not in self.groups:
             self.total_query.add_group_column(column)
             self.groups.append(column)
@@ -54,7 +55,7 @@ class BaseballQuery:
                 column = self.play_query.team_column
             self.play_query.add_group_column(column)
 
-    def order_by(self, column):
+    def order_by(self, column: str) -> None:
         self.total_query.order_by(column)
         if column == 'name':
             column = self.play_query.name_column
@@ -62,7 +63,7 @@ class BaseballQuery:
             column = self.play_query.team_column
         self.play_query.order_by(column)
 
-    def add_filters(self, filters: Dict):
+    def add_filters(self, filters: Dict) -> None:
         for build in (self.total_query, self.play_query):
             for column, values in filters.items():
                 if values:
@@ -79,10 +80,10 @@ class BaseballQuery:
                     else:
                         build.add_dynamic_where(column, values)
 
-    def get_merge(self):
+    def get_merge(self) -> List[str]:
         return self.groups
 
-    def fetch_data(self):
+    def fetch_data(self) -> pd.DataFrame:
         df = get_combined_data(self.total_query, self.play_query, merge_on=self.get_merge())
         if df.empty:
             return df

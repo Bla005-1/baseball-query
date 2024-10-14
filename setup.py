@@ -10,7 +10,7 @@ def parse_requirements(filename):
 if __name__ == '__main__':
     setup(
         name='baseball_stats',
-        version='1.2.1',
+        version='1.2.2',
         packages=find_packages(),
         install_requires=parse_requirements('requirements.txt'),
         author='Bryce Dickson',
@@ -20,5 +20,5 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 3',
             'Operating System :: OS Independent',
         ],
-        python_requires='>=3.6',
+        python_requires='>=3.10',
     )
