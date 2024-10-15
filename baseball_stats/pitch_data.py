@@ -19,6 +19,8 @@ def process_pitcher_rows(df: pd.DataFrame, metrics: List[str]) -> pd.DataFrame:
 
 
 def pitcher_per_pitch_calcs(pitch_results: List[str]):
+    if pitch_results is None:
+        return {'strike_percent': 0, 'csw_percent': 0, 'swstr_percent': 0, 'ball_percent': 0}
     strikes = 0
     balls = 0
     swinging_strikes = 0

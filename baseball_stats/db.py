@@ -76,7 +76,7 @@ def insert_league_averages(league: str, processed_data: List[Dict], keys: List[s
 def add_batter_league_averages(league: str):
     keys = ['percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle', 'contact_percent', 'zone_contact',
             'chase_percent', 'swing_percent', 'zone_swing_percent']
-    filters = {'league': league, 'game_type': 'R', 'year': YEAR}
+    filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'batter')
     bq.add_filters(filters)
     data = bq.fetch_data()
@@ -85,7 +85,7 @@ def add_batter_league_averages(league: str):
 
 def add_pitcher_league_averages(league: str):
     keys = ['strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
-    filters = {'league': league, 'game_type': 'R', 'year': YEAR}
+    filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'pitcher')
     bq.add_filters(filters)
     data = bq.fetch_data()
