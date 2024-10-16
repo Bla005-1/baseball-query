@@ -236,15 +236,15 @@ def daily_update(start_date: None | dt.date | str = None) -> None:
         except FileNotFoundError:
             start_date = dt.date.today() - dt.timedelta(days=1)
         start_date = start_date - dt.timedelta(days=1)
-    log.info(f'Using {start_date} as the beginning of new requests')
+    log.debug(f'Using {start_date} as the beginning of new requests')
     the_pk_dict = get_pks_over_time(str(start_date), debugger=debug)
     initialize_threads(the_pk_dict)
-    log.info(debug)
+    log.debug(debug)
     try:
         for key in sport_ids.keys():
             add_batter_league_averages(key)
             add_pitcher_league_averages(key)
-        log.info('Added league averages')
+        log.debug('Added league averages')
     except Exception:
         log.error('Error with league averages:', exc_info=True)
         traceback.print_exc()

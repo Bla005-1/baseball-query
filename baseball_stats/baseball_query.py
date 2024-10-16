@@ -16,30 +16,22 @@ class BaseballQuery:
         self.all_metrics = metric_keys
         totals_metrics = []
         plays_metrics = []
+        groups = []
         for metric in metric_keys:
             if metric in set(grouping_columns):
-                self.groups.append(metric)
+                groups.append(metric)
             elif metric in set(all_total_keys):
                 totals_metrics.append(metric)
             elif metric in set(list(play_metrics.keys()) + requires_pitch_results):
                 plays_metrics.append(metric)
         if totals_metrics:
-            totals_metrics.extend(self.groups)
+            totals_metrics.extend(groups)
         if plays_metrics:
-            plays_metrics.extend(self.groups)
+            plays_metrics.extend(groups)
         self.total_query = TotalsBuilder(totals_metrics, player_type)
         self.play_query = PlaysBuilder(plays_metrics, player_type)
-        for i, group in enumerate(self.groups):
-            if group == 'pitch_name':
-                self.total_query.empty = True
-            elif group == 'name':
-                group = 'player_id'
-                self.groups[i] = group
-            self.total_query.add_group_column(group)
-            if group == 'team_name':
-                group = self.play_query.team_column
-
-            self.play_query.add_group_column(group)
+        for g in groups:
+            self.add_group_column(g)
 
     def add_where_and_group(self, column: str, value: str | List[str]) -> None:  # for user defined columns
         self.add_filters({column: value})
@@ -49,7 +41,10 @@ class BaseballQuery:
         if column not in self.groups:
             self.total_query.add_group_column(column)
             self.groups.append(column)
-            if column == 'name':
+            if column == 'pitch_name':
+                self.total_query.empty = True
+            elif column == 'name':
+                self.add_group_column('player_id')
                 column = self.play_query.name_column
             elif column == 'team_name':
                 column = self.play_query.team_column
