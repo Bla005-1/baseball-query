@@ -1,4 +1,5 @@
 import json
+import math
 import queue
 import sqlite3
 import threading
@@ -15,7 +16,7 @@ from .utils import DebugManager, connect, DB_DIR
 from .https import get_plays, get_pks_over_time
 from .baseball_query import BaseballQuery
 from .static_data import db_keys, hitter_db_keys, pitcher_db_keys, fielder_db_keys, sport_ids
-
+from .errors import *
 
 log = logging.getLogger()
 debug = DebugManager()
@@ -49,6 +50,8 @@ def insert_league_averages(league: str, processed_data: List[Dict], keys: List[s
     arrays = {}
     for row in processed_data:
         for key in keys:
+            if key == 'name':
+                continue
             arrays.setdefault(key, [])
             arrays[key].append(row[key])
     args = []
@@ -59,7 +62,7 @@ def insert_league_averages(league: str, processed_data: List[Dict], keys: List[s
                 stddev = excluded.stddev
         '''
     for k, value in arrays.items():
-        value = [v for v in value if v is not None]
+        value = [v for v in value if v is not None and not math.isnan(v)]
         if len(value) == 0:
             std_dev = 0
             avg = 0
@@ -74,7 +77,7 @@ def insert_league_averages(league: str, processed_data: List[Dict], keys: List[s
 
 
 def add_batter_league_averages(league: str):
-    keys = ['percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle', 'contact_percent', 'zone_contact',
+    keys = ['name', 'percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle', 'contact_percent', 'zone_contact',
             'chase_percent', 'swing_percent', 'zone_swing_percent']
     filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'batter')
@@ -84,7 +87,7 @@ def add_batter_league_averages(league: str):
 
 
 def add_pitcher_league_averages(league: str):
-    keys = ['strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
+    keys = ['name', 'strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
     filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'pitcher')
     bq.add_filters(filters)
@@ -242,8 +245,11 @@ def daily_update(start_date: None | dt.date | str = None) -> None:
     log.debug(debug)
     try:
         for key in sport_ids.keys():
-            add_batter_league_averages(key)
-            add_pitcher_league_averages(key)
+            try:
+                add_batter_league_averages(key)
+                add_pitcher_league_averages(key)
+            except NoDataFoundError:
+                continue
         log.debug('Added league averages')
     except Exception:
         log.error('Error with league averages:', exc_info=True)
