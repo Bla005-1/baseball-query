@@ -93,6 +93,7 @@ play_metrics = {
     'team_fielding': 'team_fielding AS team_name',
     'team_batting': 'team_batting AS team_name',
     'league': 'league',
+    'leagues': 'GROUP_CONCAT(DISTINCT league) AS leagues',
     'pitch_name': 'pitch_name',
     'pitches': 'COUNT(*) AS pitches',
     'count': 'COUNT(*) AS count',

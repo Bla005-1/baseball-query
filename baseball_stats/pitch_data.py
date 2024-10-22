@@ -35,10 +35,10 @@ def pitcher_per_pitch_calcs(pitch_results: List[str]):
     csw = (strikes + swinging_strikes) / len(pitch_results)
     swstr = swinging_strikes / len(pitch_results)
     ball_ratio = balls / len(pitch_results)
-    return {'strike_percent': strike_ratio * 100,
-            'csw_percent': csw * 100,
-            'swstr_percent': swstr * 100,
-            'ball_percent': ball_ratio * 100}
+    return {'strike_percent': round(strike_ratio * 100, 2),
+            'csw_percent': round(csw * 100, 2),
+            'swstr_percent': round(swstr * 100, 2),
+            'ball_percent': round(ball_ratio * 100, 2)}
 
 
 def calc_release_pos(data) -> tuple[float, float]:

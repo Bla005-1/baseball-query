@@ -102,9 +102,9 @@ def calculate_contacts_metrics(pitch_results: List[str], zones: List[str]) -> Di
     zone_swing_percent = in_zone_swing / in_zone if in_zone else 0
 
     return {
-        'contact_percent': round(contact_percent, 4),
-        'zone_contact': round(zone_contact, 4),
-        'chase_percent': round(chase_percent, 4),
-        'swing_percent': round(swing_percent, 4),
-        'zone_swing_percent': round(zone_swing_percent, 4)
+        'contact_percent': round(contact_percent * 100, 2),
+        'zone_contact': round(zone_contact * 100, 2),
+        'chase_percent': round(chase_percent * 100, 2),
+        'swing_percent': round(swing_percent * 100, 2),
+        'zone_swing_percent': round(zone_swing_percent * 100, 2)
     }
