@@ -50,7 +50,7 @@ def insert_league_averages(league: str, processed_data: List[Dict], keys: List[s
     arrays = {}
     for row in processed_data:
         for key in keys:
-            if key == 'name':
+            if key == 'name' or key == 'hits' or key == 'pitches_thrown':
                 continue
             arrays.setdefault(key, [])
             arrays[key].append(row[key])
@@ -78,20 +78,22 @@ def insert_league_averages(league: str, processed_data: List[Dict], keys: List[s
 
 def add_batter_league_averages(league: str):
     keys = ['name', 'percentile_90', 'avg_ev', 'max_ev', 'avg_hit_angle', 'contact_percent', 'zone_contact',
-            'chase_percent', 'swing_percent', 'zone_swing_percent']
+            'chase_percent', 'swing_percent', 'zone_swing_percent', 'hits']
     filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'batter')
     bq.add_filters(filters)
     data = bq.fetch_data()
+    data = data[data['hits'] > 50]
     insert_league_averages(league, data.to_dict(orient='records'), keys)
 
 
 def add_pitcher_league_averages(league: str):
-    keys = ['name', 'strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent']
+    keys = ['name', 'strike_percent', 'csw_percent', 'swstr_percent', 'ball_percent', 'pitches_thrown']
     filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'pitcher')
     bq.add_filters(filters)
     data = bq.fetch_data()
+    data = data[data['pitches_thrown'] > 100]
     insert_league_averages(league, data.to_dict(orient='records'), keys)
 
 
