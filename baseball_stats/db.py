@@ -82,7 +82,10 @@ def add_batter_league_averages(league: str):
     filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'batter')
     bq.add_filters(filters)
-    data = bq.fetch_data()
+    try:
+        data = bq.fetch_data()
+    except NoDataFoundError:
+        return
     data = data[data['hits'] > 50]
     insert_league_averages(league, data.to_dict(orient='records'), keys)
 
@@ -92,7 +95,10 @@ def add_pitcher_league_averages(league: str):
     filters = {'league': league, 'game_type': 'R', 'year': str(YEAR)}
     bq = BaseballQuery(keys, 'pitcher')
     bq.add_filters(filters)
-    data = bq.fetch_data()
+    try:
+        data = bq.fetch_data()
+    except NoDataFoundError:
+        return
     data = data[data['pitches_thrown'] > 100]
     insert_league_averages(league, data.to_dict(orient='records'), keys)
 

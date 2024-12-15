@@ -11,6 +11,8 @@ def get_combined_data(query1: QueryBuilder, query2: QueryBuilder, merge_on: tupl
     if query1 and query2:
         data1 = select_data(query1.finish_query(), query1.get_args())
         data2 = select_data(query2.finish_query(), query2.get_args())
+        if len(data1) == 0 or len(data2) == 0:
+            raise NoDataFoundError(query1=query1, query2=query2)
         df = pd.merge(pd.DataFrame(data1), pd.DataFrame(data2), on=merge_on)
     elif query1:
         data1 = select_data(query1.finish_query(), query1.get_args())
