@@ -25,7 +25,6 @@ def process_batter_rows(df: pd.DataFrame, metrics: List[str], groups: List[str],
     manager = MetricManager(metric_classes, supplementary_df, groups)
     final_df = manager.apply_metrics(df)
     final_df = final_df[metrics]
-
     return final_df
 
 

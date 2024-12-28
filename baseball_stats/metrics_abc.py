@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict
 import pandas as pd
 import numpy as np
-import time
 
 class VectorizedMetric(ABC):
     def __init__(self, names: str | List[str], dependencies: Tuple[str, ...]):
@@ -53,15 +52,24 @@ class MetricManager:
         self.vectorized_metrics = vectorized_metrics
         self.supplementary_df = supplementary_df
         self.groups = groups
+        self.grouped_data = self._precompute_grouped_data(supplementary_df, groups)
+
+    def _precompute_grouped_data(self, supplementary_df, groups):
+        """
+        Precompute grouped data for the supplementary DataFrame.
+        """
+        grouped_data = {}
+        grouped = supplementary_df.groupby(groups)
+        for key, group in grouped:
+            grouped_data[key] = group
+        return grouped_data
 
     def process_row(self, row: pd.Series):
-        start = time.time()
         # Create temporary DataFrame for vectorized metrics
-        mask = np.logical_and.reduce(
-            [self.supplementary_df[group] == row[group] for group in self.groups]
-        )
-        temp_df = self.supplementary_df[mask]
+        group_key = tuple(row[group] for group in self.groups)
 
+        # Get the precomputed group DataFrame
+        temp_df = self.grouped_data.get(group_key, pd.DataFrame())
         # Process 'hit_coordinates' if the column exists
         if 'hit_coordinates' in temp_df.columns:
             temp_df['hit_coordinates'] = temp_df['hit_coordinates'].map(
