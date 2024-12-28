@@ -30,7 +30,7 @@ class SQLQuery:
 
     def build_query(self) -> str:
         if not self.from_table:
-            raise ValueError('FROM clause is missing.')
+            raise EmptyQueryError('FROM clause is missing.')
         if len(self.select) == 0:
             raise EmptyQueryError('SELECT clause is missing.')
         query = f'SELECT {", ".join(self.select)} FROM {self.from_table}'
@@ -141,6 +141,7 @@ class QueryBuilder:
         return self.get_query()
 
     def __bool__(self):
+        self.get_query()
         return not self.empty
 
 

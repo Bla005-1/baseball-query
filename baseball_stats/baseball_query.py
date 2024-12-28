@@ -14,6 +14,7 @@ class BaseballQuery:
         self.groups = []
         self.player_type = player_type
         self.all_metrics = list(metric_keys)
+        metric_keys = list(metric_keys)
         totals_metrics = []
         plays_metrics = []
         groups = []

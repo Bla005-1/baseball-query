@@ -11,3 +11,4 @@ last_update.txt
 baseball_env
 baseball_stats.egg-info
 build
+/tests/test_everyting.py
