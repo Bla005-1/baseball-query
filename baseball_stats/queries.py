@@ -1,51 +1,108 @@
-from typing import List
-from .builder_metrics import *
+from typing import List, Tuple
+from .db_tools import fetch_metric_sqls
+from .errors import EmptyQueryError
+
+
+class SQLQuery:
+    def __init__(self):
+        self.select = []
+        self.from_table = None
+        self.where = []
+        self.group_by = []
+        self.order_by = []
+
+    def add_select(self, column: str):
+        if column not in self.select:
+            self.select.append(column)
+
+    def set_from_table(self, table: str):
+        self.from_table = table
+
+    def add_where(self, condition: str):
+        self.where.append(condition)
+
+    def add_group_by(self, column: str):
+        if column not in self.group_by:
+            self.group_by.append(column)
+
+    def add_order_by(self, column: str):
+        self.order_by.append(column)
+
+    def build_query(self) -> str:
+        if not self.from_table:
+            raise ValueError('FROM clause is missing.')
+        if len(self.select) == 0:
+            raise EmptyQueryError('SELECT clause is missing.')
+        query = f'SELECT {", ".join(self.select)} FROM {self.from_table}'
+        if self.where:
+            query += f' WHERE {" AND ".join(self.where)}'
+        if self.group_by:
+            query += f' GROUP BY {", ".join(self.group_by)}'
+        if self.order_by:
+            query += f' ORDER BY {", ".join(self.order_by)}'
+        return query
+
+    def __str__(self):
+        return self.build_query()
+
+
+class BaseStrSQLQuery(SQLQuery):
+    def __init__(self, base_query: str):
+        super().__init__()
+        self.base_query = base_query
+
+    def build_query(self) -> str:
+        query = self.base_query
+        if self.where:
+            query += f' WHERE {" AND ".join(self.where)}'
+        if self.group_by:
+            query += f' GROUP BY {", ".join(self.group_by)}'
+        if self.order_by:
+            query += f' ORDER BY {", ".join(self.order_by)}'
+        return query
 
 
 class QueryBuilder:
-    def __init__(self, base_query: str = 'SELECT '):
-        self.empty = True
-        self.base_query = base_query
+    def __init__(self, sql_query: SQLQuery = None):
+        self.sql_query = sql_query or SQLQuery()
+        self.empty = False
         self.args = []
-        self.where = []
-        self.order = []
         self.name_column = 'name'
         self.team_column = 'team_name'
-        self.group_by = []
-        self.is_finished = False
 
-    def add_name(self, name_values):
+    def add_name(self, name_values: str | List[str]):
         self.add_dynamic_where(self.name_column, name_values)
 
-    def add_team(self, team_values):
+    def add_team(self, team_values: str | List[str]):
         self.add_dynamic_where(self.team_column, team_values)
 
-    def add_dates(self, dates):
+    def add_dates(self, dates: Tuple[str, str]):
         if dates is not None:
             if len(dates) == 2:
                 if dates[0] and dates[1]:
-                    self.add_raw_where('date BETWEEN ? AND ?', [dates[0], dates[1]])
+                    self.add_raw_where('date BETWEEN %s AND %s', [dates[0], dates[1]])
 
     def add_year(self, year: str):
         if year:
-            self.where.append('date LIKE ?')
+            self.add_raw_where('date LIKE %s')
             self.args.append(year + '%')
 
     def add_raw_where(self, where_clause: str, args: List[str] | str = None):
-        self.where.append(where_clause)
+        self.sql_query.add_where(where_clause)
         if isinstance(args, str):
             self.args.append(args)
         elif args:
             self.args.extend(args)
 
     def order_by(self, column: str):
-        self.order.append(column)
+        self.sql_query.add_order_by(column)
 
     def add_group_column(self, column: str | List[str]):
         if isinstance(column, str):
-            self.group_by.append(column)
+            self.sql_query.add_group_by(column)
         else:
-            self.group_by.extend(column)
+            for c in column:
+                self.sql_query.add_group_by(c)
 
     def add_dynamic_where(self, column: str, values: str | List[str]):
         if not values:
@@ -53,95 +110,63 @@ class QueryBuilder:
             return
         if isinstance(values, list):
             if len(values) == 1:
-                self.where.append(f'{column} = ?')
+                self.sql_query.add_where(f'{column} = %s')
             else:
-                self.where.append(f'{column} IN ({", ".join("?" * len(values))})')
+                self.sql_query.add_where(f'{column} IN ({", ".join("%s" * len(values))})')
             self.args.extend(values)
         else:
-            self.where.append(f'{column} = ?')
+            self.sql_query.add_where(f'{column} = %s')
             self.args.append(values)
 
-    def finish_query(self) -> str:
-        if self.is_finished:
-            return self.get_query()
-        if self.where:
-            self.base_query += ' WHERE ' + ' AND '.join(self.where)
-        if self.group_by:
-            self.base_query += f' GROUP BY {", ".join(self.group_by)}'
-        if self.order:
-            self.base_query += f' ORDER BY {", ".join(self.order)}'
-        self.is_finished = True
-        return self.get_query()
+    def get_query(self) -> str:
+        try:
+            return self.sql_query.build_query()
+        except EmptyQueryError:
+            self.empty = True
+            return 'empty query'
 
-    def get_query(self):
-        return self.base_query
-
-    def get_args(self):
+    def get_args(self) -> List[str]:
         return self.args
 
+    def process_metrics(self, metric_keys: List[str], metric_sqls: List[str]):
+        for m, sql_line in fetch_metric_sqls(metric_keys).items():
+            if not sql_line:
+                continue
+            for sql in sql_line.split(','):
+                if sql not in metric_sqls:
+                    metric_sqls.append(sql)
+                    self.sql_query.add_select(sql)
+
     def __str__(self):
-        return self.base_query
+        return self.get_query()
 
     def __bool__(self):
         return not self.empty
 
 
-def append_or_extend(the_list: List, the_item: List[str] | str):
-    if isinstance(the_item, str):
-        the_list.append(the_item)
-    else:
-        the_list.extend(the_item)
-
-
 class TotalsBuilder(QueryBuilder):
     def __init__(self, metric_keys: List[str], player_type: str):
         super().__init__()
-        self.metrics = []
+        self.metric_sql = []
+        self.metric_keys = metric_keys
         self.name_column = 'name'
         self.team_column = 'team_name'
-        for m in metric_keys:
-            if m in totals_common.keys():
-                append_or_extend(self.metrics, totals_common[m])
-            elif player_type == 'batter' and m in totals_batter_metrics:
-                append_or_extend(self.metrics, totals_batter_metrics[m])
-            elif player_type == 'pitcher' and m in totals_pitcher_metrics:
-                append_or_extend(self.metrics, totals_pitcher_metrics[m])
-            elif m in grouping_columns:
-                append_or_extend(self.metrics, m)
-        if metric_keys and self.metrics:
-            if not all(item in grouping_columns for item in self.metrics):
-                self.empty = False
-        self.base_query += ', '.join(set(self.metrics))
-        if player_type == 'batter':
-            table = 'hitters'
-        else:
-            table = 'pitchers'
-        self.base_query += f' FROM {table} '
+        self.process_metrics(self.metric_keys, self.metric_sql)
+        self.sql_query.set_from_table('hitters' if player_type == 'batter' else 'pitchers')
 
 
 class PlaysBuilder(QueryBuilder):
     def __init__(self, metric_keys: List[str], player_type: str):
         super().__init__()
-
+        self.metric_keys = metric_keys
         self.name_column = player_type + '_name'
         self.team_column = 'team_batting' if player_type == 'batter' else 'team_fielding'
-        self.metrics = []
-        for m in metric_keys:
-            if m == 'team_name':
-                m = self.team_column
-            elif m == 'name':
-                m = self.name_column
-            if m in play_metrics.keys():
-                append_or_extend(self.metrics, play_metrics[m])
-            elif m in requires_pitch_results:
-                append_or_extend(self.metrics, play_metrics['pitch_results'])
-            elif m in grouping_columns:
-                append_or_extend(self.metrics, m)
-        if metric_keys and self.metrics:
-            if not all(item in grouping_columns for item in self.metrics):
-                self.empty = False
-        self.base_query += ', '.join(set(self.metrics))
-        self.base_query += ' FROM all_plays '
-
-
-
+        self.metric_sql = []
+        for key, replacement in [('team_name', self.team_column), ('name', self.name_column)]:
+            try:
+                index = self.metric_keys.index(key)
+                self.metric_keys[index] = replacement
+            except ValueError:
+                continue
+        self.process_metrics(self.metric_keys, self.metric_sql)
+        self.sql_query.set_from_table('all_plays')

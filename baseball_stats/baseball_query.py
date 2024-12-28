@@ -1,32 +1,48 @@
+import logging
 from typing import *
+
+import numpy as np
 import pandas as pd
-from .common_data import get_combined_data
-from .builder_metrics import *
+from .processing import get_combined_data, process_batter_rows, process_pitcher_rows
 from .queries import TotalsBuilder, PlaysBuilder
-from .batter_data import process_batter_rows
-from .pitch_data import process_pitcher_rows
+from .db_tools import DB_METRICS_DICT, select_data
 
-all_total_keys = list(totals_common.keys()) + list(totals_batter_metrics.keys()) + list(totals_pitcher_metrics.keys())
-
+log = logging.getLogger(__name__)
 
 class BaseballQuery:
-    def __init__(self, metric_keys: List[str], player_type: str):
+    def __init__(self, metric_keys: Iterable[str], player_type: str):
         self.groups = []
         self.player_type = player_type
-        self.all_metrics = metric_keys
+        self.all_metrics = list(metric_keys)
         totals_metrics = []
         plays_metrics = []
         groups = []
+        self.supplementary_metrics = []
+        self.supplementary_df = pd.DataFrame()
         for metric in metric_keys:
-            if metric in set(grouping_columns):
+            try:
+                m = DB_METRICS_DICT[metric]
+            except KeyError:
+                log.error(f"Metric {metric} not found")
+                continue
+            if m.dependencies:
+                for dep in m.dependencies:
+                    dep_metric = DB_METRICS_DICT[dep]
+                    if dep_metric.is_all_plays:
+                        self.supplementary_metrics.append(dep)
+                    else:
+                        metric_keys.append(dep)
+            if m.is_grouping:
                 groups.append(metric)
-            elif metric in set(all_total_keys):
+            elif player_type == 'batter' and m.is_totals_batter:
                 totals_metrics.append(metric)
-            elif metric in set(list(play_metrics.keys()) + requires_pitch_results):
+            elif player_type == 'pitcher' and m.is_totals_pitcher:
+                totals_metrics.append(metric)
+            elif m.is_all_plays:
                 plays_metrics.append(metric)
-        if totals_metrics:
+        if len(totals_metrics) > 0:
             totals_metrics.extend(groups)
-        if plays_metrics:
+        if len(plays_metrics) > 0:
             plays_metrics.extend(groups)
         self.total_query = TotalsBuilder(totals_metrics, player_type)
         self.play_query = PlaysBuilder(plays_metrics, player_type)
@@ -41,7 +57,7 @@ class BaseballQuery:
         if column not in self.groups:
             self.total_query.add_group_column(column)
             self.groups.append(column)
-            if column == 'pitch_name':
+            if column == 'pitch_name' or column == 'inning':
                 self.total_query.empty = True
             elif column == 'name':
                 self.add_group_column('player_id')
@@ -80,12 +96,21 @@ class BaseballQuery:
 
     def fetch_data(self) -> pd.DataFrame:
         df = get_combined_data(self.total_query, self.play_query, merge_on=self.get_merge())
+        depend = list(set(self.supplementary_metrics))
+        if depend:
+            depend.extend(self.groups)
+            supp_builder = PlaysBuilder(depend, self.player_type)
+            supp_builder.sql_query.where = list(self.play_query.sql_query.where)
+            supp_builder.args = list(self.play_query.args)
+            supplementary_data = select_data(supp_builder.get_query(), supp_builder.get_args())
+            self.supplementary_df = pd.DataFrame(supplementary_data)
+            self.supplementary_df.fillna(np.nan)
         if df.empty:
             return df
         if self.player_type == 'batter':
-            return process_batter_rows(df, self.all_metrics)
-        if self.player_type == 'pitcher':
-            return process_pitcher_rows(df, self.all_metrics)
+            return process_batter_rows(df, self.all_metrics, self.groups, self.supplementary_df)
+        elif self.player_type == 'pitcher':
+            return process_pitcher_rows(df, self.all_metrics, self.groups, self.supplementary_df)
 
     def __str__(self):
         return self.play_query.get_query() + '\n' + self.total_query.get_query()

@@ -1,6 +1,7 @@
 numpy~=1.25.0
 pandas~=2.0.3
-tqdm~=4.65.0
-requests~=2.31.0
-connexion~=3.0.6
-scikit-learn
+setuptools~=70.0.0
+PyMySQL~=1.1.1
+requests
+tqdm
+baseball_stats
