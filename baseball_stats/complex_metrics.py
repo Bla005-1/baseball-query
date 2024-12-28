@@ -129,7 +129,8 @@ class FlyBallPercentage(VectorizedMetric):
     def calculate(self, temp_df: pd.DataFrame) -> dict:
         fly_ball_mask: pd.Series[bool] = temp_df['trajectories'] == 'fly_ball'  # type: ignore
         fly_balls = fly_ball_mask.sum()
-        all_hits = len(temp_df)
+        batted_ball_mask: pd.Series[bool] = temp_df['trajectories'].notna()  # type: ignore
+        all_hits = batted_ball_mask.sum()
         fb_percent = fly_balls / all_hits if all_hits else 0
         return {'FB_percent': round(fb_percent * 100, 2)}
 
@@ -141,7 +142,8 @@ class GroundBallPercentage(VectorizedMetric):
     def calculate(self, temp_df: pd.DataFrame) -> dict:
         ground_ball_mask: pd.Series[bool] = temp_df['trajectories'] == 'ground_ball'  # type: ignore
         ground_balls = ground_ball_mask.sum()
-        all_hits = len(temp_df)
+        batted_ball_mask: pd.Series[bool] = temp_df['trajectories'].notna()  # type: ignore
+        all_hits = batted_ball_mask.sum()
         gb_percent = ground_balls / all_hits if all_hits else 0
         return {'GB_percent': round(gb_percent * 100, 2)}
 
@@ -153,7 +155,8 @@ class LineDrivePercentage(VectorizedMetric):
     def calculate(self, temp_df: pd.DataFrame) -> dict:
         line_drive_mask: pd.Series[bool] = temp_df['trajectories'] == 'line_drive'  # type: ignore
         line_drives = line_drive_mask.sum()
-        all_hits = len(temp_df)
+        batted_ball_mask: pd.Series[bool] = temp_df['trajectories'].notna()  # type: ignore
+        all_hits = batted_ball_mask.sum()
         ld_percent = line_drives / all_hits if all_hits else 0
         return {'LD_percent': round(ld_percent * 100, 2)}
 
