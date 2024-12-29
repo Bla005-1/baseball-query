@@ -132,10 +132,9 @@ class QueryBuilder:
         for m, sql_line in fetch_metric_sqls(metric_keys).items():
             if not sql_line:
                 continue
-            for sql in sql_line.split(','):
-                if sql not in metric_sqls:
-                    metric_sqls.append(sql)
-                    self.sql_query.add_select(sql)
+            if sql_line not in metric_sqls:
+                metric_sqls.append(sql_line)
+                self.sql_query.add_select(sql_line)
 
     def __str__(self):
         return self.get_query()

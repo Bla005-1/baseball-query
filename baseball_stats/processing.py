@@ -19,22 +19,27 @@ def process_batter_rows(df: pd.DataFrame, metrics: List[str], groups: List[str],
                         supplementary_df: pd.DataFrame) -> pd.DataFrame:
     if 'OBS' in metrics:
         df['OBS'] = df['OBP'] + df['SLG']
-    metric_classes = [COMPLEX_METRICS_DICT[m] for m in metrics if m in COMPLEX_METRICS_DICT.keys()]
-    metric_classes = list(set(metric_classes))
-    metric_classes = [m() for m in metric_classes]
-    manager = MetricManager(metric_classes, supplementary_df, groups)
-    final_df = manager.apply_metrics(df)
+    if supplementary_df.empty:
+        final_df = df
+    else:
+        metric_classes = [COMPLEX_METRICS_DICT[m] for m in metrics if m in COMPLEX_METRICS_DICT.keys()]
+        metric_classes = list(set(metric_classes))
+        metric_classes = [m() for m in metric_classes]
+        manager = MetricManager(metric_classes, supplementary_df, groups)
+        final_df = manager.apply_metrics(df)
     final_df = final_df[metrics]
     return final_df
 
 
 def process_pitcher_rows(df: pd.DataFrame, metrics: List[str], groups: List[str],
                         supplementary_df: pd.DataFrame) -> pd.DataFrame:
-    metric_classes = [COMPLEX_METRICS_DICT[m]() for m in metrics if m in COMPLEX_METRICS_DICT.keys()]
-    manager = MetricManager(metric_classes, supplementary_df, groups)
-    final_df = manager.apply_metrics(df)
+    if supplementary_df.empty:
+        final_df = df
+    else:
+        metric_classes = [COMPLEX_METRICS_DICT[m]() for m in metrics if m in COMPLEX_METRICS_DICT.keys()]
+        manager = MetricManager(metric_classes, supplementary_df, groups)
+        final_df = manager.apply_metrics(df)
     final_df = final_df[metrics]
-
     return final_df
 
 def get_combined_data(query1: QueryBuilder, query2: QueryBuilder, merge_on: Iterable[str]) -> pd.DataFrame:

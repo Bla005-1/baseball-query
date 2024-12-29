@@ -62,9 +62,6 @@ class BaseballQuery:
                 self.total_query.empty = True
             elif column == 'name':
                 self.add_group_column('player_id')
-                column = self.play_query.name_column
-            elif column == 'team_name':
-                column = self.play_query.team_column
             self.play_query.add_group_column(column)
 
     def order_by(self, column: str) -> None:
