@@ -69,7 +69,7 @@ class MetricManager:
         group_key = tuple(row[group] for group in self.groups)
 
         # Get the precomputed group DataFrame
-        temp_df = self.grouped_data.get(group_key, pd.DataFrame())
+        temp_df = self.grouped_data.get(group_key, pd.DataFrame(columns=self.supplementary_df.columns))
         # Process 'hit_coordinates' if the column exists
         if 'hit_coordinates' in temp_df.columns:
             temp_df['hit_coordinates'] = temp_df['hit_coordinates'].map(
