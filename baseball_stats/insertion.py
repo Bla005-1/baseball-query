@@ -3,7 +3,7 @@ import numpy as np
 from typing import List, Dict, Tuple
 from pymysql import Connection, MySQLError
 from pymysql.cursors import Cursor
-from .db_tools import connect, TABLE_COLUMNS_DICT
+from .db_tools import connect, constants_cache
 
 
 class InsertManager:
@@ -52,7 +52,7 @@ class InsertManager:
         self.conn.commit()
 
     def insert_batch(self, table: str, batch_data: List[Dict]) -> None:
-        columns = TABLE_COLUMNS_DICT[table]
+        columns = constants_cache.get_table_columns_dict()[table]
         q_values = ', '.join(['%s'] * len(columns))
         query = f'INSERT IGNORE INTO {table} ({", ".join(columns)}) VALUES ({q_values})'
         cleaned_batch = self.clean_data(batch_data, columns)

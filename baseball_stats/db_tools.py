@@ -1,6 +1,7 @@
 import pymysql
 from pymysql.cursors import DictCursor
 import os
+import time
 from typing import List, Tuple, Dict
 from .errors import *
 from .metrics_abc import DBMetric
@@ -40,6 +41,7 @@ def select_key_values(query: str, key_name: str) -> List:
     keys = [x[key_name] for x in data]
     return keys
 
+
 def fetch_metric_sqls(metric_names: List[str]) -> Dict[str, str]:
     if not metric_names:
         return {}
@@ -49,34 +51,77 @@ def fetch_metric_sqls(metric_names: List[str]) -> Dict[str, str]:
     return {row['metric_name']: row['sql_value'] for row in results}
 
 
-TOTALS_BATTER = select_key_values('SELECT metric_name FROM metrics WHERE is_totals_batter = 1',
-                                  'metric_name')
-TOTALS_PITCHER = select_key_values('SELECT metric_name FROM metrics WHERE is_totals_pitcher = 1',
-                                   'metric_name')
-PLAYS_METRICS = select_key_values('SELECT metric_name FROM metrics WHERE is_all_plays = 1', 'metric_name')
-GROUP_METRICS = select_key_values('SELECT metric_name FROM metrics WHERE is_grouping = 1', 'metric_name')
+class ConstantsCache:
+    def __init__(self, cache_expiry: int = 3600):
+        self.cache_expiry = cache_expiry
+        self.cache = {}
 
-def initialize_table_columns(tables: List[str]) -> Dict[str, List[str]]:
-    conn, cursor = connect()
-    table_columns = {}
-    try:
-        for table in tables:
-            cursor.execute(f"DESCRIBE {table}")
-            columns = [row['Field'] for row in cursor.fetchall()]
+    def get_cache_entry(self, key: str):
+        cache_entry = self.cache.get(key)
+        if cache_entry and time.time() - cache_entry['timestamp'] < self.cache_expiry:
+            return cache_entry
+        return None
+
+    def get_metric_from_cache(self, key: str, query, column_name) -> List[str, ...] | None:
+        cache_entry = self.get_cache_entry(key)
+        if cache_entry:
+            return cache_entry['data']
+        self.cache[key] = {
+            'data': select_key_values(query, column_name),
+            'timestamp': time.time()
+        }
+        return self.cache[key]['data']
+
+    # Getters for the constants
+    def get_totals_batter(self) -> List[str, ...]:
+        query = 'SELECT metric_name FROM metrics WHERE is_totals_batter = 1'
+        return self.get_metric_from_cache('TOTALS_BATTER', query, 'metric_name')
+
+    def get_totals_pitcher(self) -> List[str, ...]:
+        query = 'SELECT metric_name FROM metrics WHERE is_totals_pitcher = 1'
+        return self.get_metric_from_cache('TOTALS_PITCHER', query, 'metric_name')
+
+    def get_plays_metrics(self) -> List[str, ...]:
+        query = 'SELECT metric_name FROM metrics WHERE is_all_plays = 1'
+        return self.get_metric_from_cache('PLAYS_METRICS', query, 'metric_name')
+
+    def get_group_metrics(self) -> List[str, ...]:
+        query = 'SELECT metric_name FROM metrics WHERE is_grouping = 1'
+        return self.get_metric_from_cache('GROUP_METRICS', query, 'metric_name')
+
+    def get_db_metrics_dict(self):
+        key = 'DB_METRICS'
+        cache_entry = self.get_cache_entry(key)
+        if cache_entry:
+            return cache_entry['data']
+        metrics = {}
+        data = select_data('SELECT * FROM metrics')
+        for row in data:
+            metrics[row['metric_name']] = DBMetric(row)
+        self.cache[key] = {
+            'data': metrics,
+            'timestamp': time.time()
+        }
+        return metrics
+
+    @staticmethod
+    def get_tables() -> Tuple[str, ...]:
+        return 'league_averages', 'hitters', 'pitchers', 'fielders', 'all_plays'
+
+    def get_table_columns_dict(self):
+        key = 'TABLE_COLUMNS'
+        cache_entry = self.get_cache_entry(key)
+        if cache_entry:
+            return cache_entry['data']
+        table_columns = {}
+        for table in self.get_tables():
+            rows = select_data(f'DESCRIBE {table}')
+            columns = [row['Field'] for row in rows]
             table_columns[table] = columns
-    finally:
-        cursor.close()
-        conn.close()
-    return table_columns
+        self.cache[key] = {
+            'data': table_columns,
+            'timestamp': time.time()
+        }
+        return table_columns
 
-TABLES = ['league_averages', 'hitters', 'pitchers', 'fielders', 'all_plays']
-TABLE_COLUMNS_DICT = initialize_table_columns(TABLES)
-
-def initialize_db_metrics():
-    metrics = {}
-    data = select_data('SELECT * FROM metrics')
-    for row in data:
-        metrics[row['metric_name']] = DBMetric(row)
-    return metrics
-
-DB_METRICS_DICT = initialize_db_metrics()
+constants_cache = ConstantsCache()

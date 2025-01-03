@@ -8,11 +8,11 @@ from .queries import QueryBuilder
 from .errors import *
 
 
-batter_default_metrics = ('name', 'league', 'pitches', 'zones', 'pitch_results', 'bip', 'percentile_90',
-                   'launch_angles', 'avg_ev', 'max_ev', 'avg_hit_angle', 'barrel_per_bbe', 'contact_percent')
+batter_default_metrics = ('name', 'league', 'pitches', 'bip', 'percentile_90','launch_angles', 'avg_ev', 'max_ev',
+                          'avg_hit_angle', 'barrel_per_bbe', 'contact_percent')
 
-pitcher_default_metrics = ('name', 'league', 'count', 'pitch_results', 'batters_faced', 'pitches_thrown',
-                   'strike_outs', 'walks', 'k_min_bb')
+pitcher_default_metrics = ('name', 'league', 'count', 'batters_faced', 'pitches_thrown','strike_outs', 'walks',
+                           'k_min_bb')
 
 
 def process_batter_rows(df: pd.DataFrame, metrics: List[str], groups: List[str],

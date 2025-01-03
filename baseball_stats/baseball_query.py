@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from .processing import get_combined_data, process_batter_rows, process_pitcher_rows
 from .queries import TotalsBuilder, PlaysBuilder
-from .db_tools import DB_METRICS_DICT, select_data
+from .db_tools import constants_cache, select_data
 
 log = logging.getLogger(__name__)
 
@@ -22,13 +22,13 @@ class BaseballQuery:
         self.supplementary_df = pd.DataFrame()
         for metric in metric_keys:
             try:
-                m = DB_METRICS_DICT[metric]
+                m = constants_cache.get_db_metrics_dict()[metric]
             except KeyError:
                 log.error(f"Metric {metric} not found")
                 continue
             if m.dependencies:
                 for dep in m.dependencies:
-                    dep_metric = DB_METRICS_DICT[dep]
+                    dep_metric = constants_cache.get_db_metrics_dict()[dep]
                     if dep_metric.is_all_plays:
                         self.supplementary_metrics.append(dep)
                     else:
