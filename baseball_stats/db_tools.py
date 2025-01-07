@@ -24,7 +24,7 @@ def connect() -> tuple[pymysql.connections.Connection, DictCursor]:
     return conn, cursor
 
 
-def select_data(query: str, args: Tuple[str] | List[str] | Dict = None) -> Tuple[Dict, ...]:
+def select_data(query: str, args: Tuple[str] | List[str] | Dict = None) -> Tuple[Dict]:
     conn, cursor = connect()
     try:
         if args is not None:
@@ -65,7 +65,7 @@ class ConstantsCache:
             return cache_entry
         return None
 
-    def get_metric_from_cache(self, key: str, query, column_name) -> List[str, ...] | None:
+    def get_metric_from_cache(self, key: str, query, column_name) -> List[str] | None:
         cache_entry = self.get_cache_entry(key)
         if cache_entry:
             return cache_entry['data']
@@ -76,19 +76,19 @@ class ConstantsCache:
         return self.cache[key]['data']
 
     # Getters for the constants
-    def get_totals_batter(self) -> List[str, ...]:
+    def get_totals_batter(self) -> List[str]:
         query = 'SELECT metric_name FROM metrics WHERE is_totals_batter = 1'
         return self.get_metric_from_cache('TOTALS_BATTER', query, 'metric_name')
 
-    def get_totals_pitcher(self) -> List[str, ...]:
+    def get_totals_pitcher(self) -> List[str]:
         query = 'SELECT metric_name FROM metrics WHERE is_totals_pitcher = 1'
         return self.get_metric_from_cache('TOTALS_PITCHER', query, 'metric_name')
 
-    def get_plays_metrics(self) -> List[str, ...]:
+    def get_plays_metrics(self) -> List[str]:
         query = 'SELECT metric_name FROM metrics WHERE is_all_plays = 1'
         return self.get_metric_from_cache('PLAYS_METRICS', query, 'metric_name')
 
-    def get_group_metrics(self) -> List[str, ...]:
+    def get_group_metrics(self) -> List[str]:
         query = 'SELECT metric_name FROM metrics WHERE is_grouping = 1'
         return self.get_metric_from_cache('GROUP_METRICS', query, 'metric_name')
 
@@ -108,7 +108,7 @@ class ConstantsCache:
         return metrics
 
     @staticmethod
-    def get_tables() -> Tuple[str, ...]:
+    def get_tables() -> Tuple[str]:
         return 'league_averages', 'hitters', 'pitchers', 'fielders', 'all_plays'
 
     def get_table_columns_dict(self):

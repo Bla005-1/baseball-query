@@ -1,5 +1,5 @@
 
-__version__ = '2.0.9'
+__version__ = '2.0.10'
 
 from .processing import *
 from .queries import *
