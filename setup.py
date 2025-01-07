@@ -10,7 +10,7 @@ def parse_requirements(filename):
 if __name__ == '__main__':
     setup(
         name='baseball_stats',
-        version='2.0.8',
+        version='2.0.9',
         packages=find_packages(),
         install_requires=parse_requirements('requirements.txt'),
         author='Bryce Dickson',

@@ -14,6 +14,9 @@ DB_CONFIG = {
     'charset': os.getenv('DB_CHARSET', 'utf8mb4')
 }
 
+def update_db_config(config: Dict) -> None:
+    global DB_CONFIG
+    DB_CONFIG = config
 
 def connect() -> tuple[pymysql.connections.Connection, DictCursor]:
     conn = pymysql.connect(**DB_CONFIG, cursorclass=DictCursor)

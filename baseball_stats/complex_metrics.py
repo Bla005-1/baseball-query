@@ -225,7 +225,7 @@ class ExpectedWeightedOBA(VectorizedMetric):
         probabilities = select_data('SELECT * FROM batted_ball_probabilities')
         probabilities = pd.DataFrame(probabilities)
         ev_la_pairs = [
-            (int((ev // 5) * 5), int((la // 5) * 5))
+            (int((ev // 2) * 2), int((la // 2) * 2))
             for ev, la in zip(temp_df['hit_speeds'], temp_df['zones'])
             if not (np.isnan(ev) or np.isnan(la))
         ]
