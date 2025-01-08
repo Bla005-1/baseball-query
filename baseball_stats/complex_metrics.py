@@ -225,15 +225,21 @@ class ExpectedWeightedOBA(VectorizedMetric):
         probabilities = select_data('SELECT * FROM batted_ball_probabilities')
         probabilities = pd.DataFrame(probabilities)
         ev_la_pairs = [
-            (int((ev // 2) * 2), int((la // 2) * 2))
-            for ev, la in zip(temp_df['hit_speeds'], temp_df['zones'])
+            (int((ev // 2) * 2), int((la // 3) * 3))
+            for ev, la in zip(temp_df['hit_speeds'], temp_df['launch_angles'])
             if not (np.isnan(ev) or np.isnan(la))
         ]
-        matched_probs = probabilities[
-            probabilities.apply(
-                lambda x: (x['ev_bin'], x['la_bin']) in ev_la_pairs, axis=1
-            )
-        ]
+        ev_la_pairs_df = pd.DataFrame(ev_la_pairs, columns=['ev_bin', 'la_bin'])
+        ev_la_pair_counts = ev_la_pairs_df.value_counts().reset_index(name='frequency')
+
+        # Step 2: Merge ev_la_pair_counts with probabilities for matching pairs
+        matched_probs = probabilities.merge(ev_la_pair_counts, on=['ev_bin', 'la_bin'], how='inner')
+
+        # Step 3: Compute adjusted probabilities directly during the merge
+        matched_probs['prob_single'] *= matched_probs['frequency']
+        matched_probs['prob_double'] *= matched_probs['frequency']
+        matched_probs['prob_triple'] *= matched_probs['frequency']
+        matched_probs['prob_home_run'] *= matched_probs['frequency']
         # Sum probabilities for relevant outcomes
         prob_single = matched_probs['prob_single'].sum()
         prob_double = matched_probs['prob_double'].sum()
