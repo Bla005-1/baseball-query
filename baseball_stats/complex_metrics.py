@@ -166,7 +166,7 @@ class AverageExitVelocityOnFlyBalls(VectorizedMetric):
         super().__init__('avg_ev_on_FB', dependencies=('trajectories', 'hit_speeds'))
 
     def calculate(self, temp_df: pd.DataFrame) -> dict:
-        fly_ball_mask: pd.Series[bool] = temp_df['trajectories'] == 'fly_ball'  # type: ignore
+        fly_ball_mask: pd.Series[bool] = (temp_df['trajectories'] == 'fly_ball') & (temp_df['hit_speeds'].notna())  # type: ignore
         fly_balls = fly_ball_mask.sum()
         fb_ev = temp_df.loc[fly_ball_mask, 'hit_speeds'].sum()
         avg_ev_on_fb = fb_ev / fly_balls if fly_balls else 0
@@ -178,7 +178,7 @@ class AverageExitVelocityOnLineDrives(VectorizedMetric):
         super().__init__('avg_ev_on_LD', dependencies=('trajectories', 'hit_speeds'))
 
     def calculate(self, temp_df: pd.DataFrame) -> dict:
-        line_drive_mask: pd.Series[bool] = temp_df['trajectories'] == 'line_drive'  # type: ignore
+        line_drive_mask: pd.Series[bool] = (temp_df['trajectories'] == 'line_drive') & (temp_df['hit_speeds'].notna())  # type: ignore
         line_drives = line_drive_mask.sum()
         ld_ev = temp_df.loc[line_drive_mask, 'hit_speeds'].sum()
         avg_ev_on_ld = ld_ev / line_drives if line_drives else 0
@@ -194,10 +194,10 @@ class PulledFB(VectorizedMetric):
         # spray_angle = -arctan((hc_x - 130) / (213 - hc_y)) + pi / 2
         hc_x = temp_df['hit_coordinates'].apply(lambda coord: coord[0])
         hc_y = temp_df['hit_coordinates'].apply(lambda coord: coord[1])
-        home_x, home_y = 125, 50
+        home_x, home_y = 130, 213
 
         # Spray angle calculation with home plate adjustment
-        spray_angle = -np.arctan2((hc_y - home_y), (hc_x - home_x)) + np.pi / 2
+        spray_angle = -np.arctan2((home_y - hc_y), (hc_x - home_x)) + np.pi / 2
         spray_angle_deg = np.degrees(spray_angle)
         right_handed = (temp_df['bat_sides'] == 'R') & (spray_angle_deg >= -45) & (spray_angle_deg <= -5)
         left_handed = (temp_df['bat_sides'] == 'L') & (spray_angle_deg >= 5) & (spray_angle_deg <= 45)
