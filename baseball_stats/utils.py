@@ -43,7 +43,7 @@ def is_barreled(launch_angle: int | float, exit_velocity: int | float) -> bool:
         and exit_velocity >= 95
         and 0 <= launch_angle <= 52
     ):
-        return True
+        return False
 
     # Not Barreled
     return False
