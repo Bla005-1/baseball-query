@@ -1,6 +1,6 @@
-from typing import List, Tuple
-from .db_tools import fetch_metric_sqls
+from typing import List, Tuple, Dict
 from .errors import EmptyQueryError
+from .metrics_abc import DBMetric
 
 
 class SQLQuery:
@@ -64,6 +64,7 @@ class BaseStrSQLQuery(SQLQuery):
 
 class QueryBuilder:
     def __init__(self, sql_query: SQLQuery = None):
+        self.metrics_dict = {}
         self.sql_query = sql_query or SQLQuery()
         self.empty = False
         self.args = []
@@ -80,12 +81,10 @@ class QueryBuilder:
         if dates is not None:
             if len(dates) == 2:
                 if dates[0] and dates[1]:
-                    self.add_raw_where('date BETWEEN %s AND %s', [dates[0], dates[1]])
+                    self.add_raw_where('official_date BETWEEN %s AND %s', [dates[0], dates[1]])
 
     def add_year(self, year: str):
-        if year:
-            self.add_raw_where('date LIKE %s')
-            self.args.append(year + '%')
+        self.add_dynamic_where('season', year)
 
     def add_raw_where(self, where_clause: str, args: List[str] | str = None):
         self.sql_query.add_where(where_clause)
@@ -129,12 +128,14 @@ class QueryBuilder:
         return self.args
 
     def process_metrics(self, metric_keys: List[str], metric_sqls: List[str]):
-        for m, sql_line in fetch_metric_sqls(metric_keys).items():
-            if not sql_line:
+        for m, db_metric in self.metrics_dict.items():
+            if m not in metric_keys:
                 continue
-            if sql_line not in metric_sqls:
-                metric_sqls.append(sql_line)
-                self.sql_query.add_select(sql_line)
+            if not db_metric.sql_value:
+                continue
+            if db_metric.sql_value not in metric_sqls:
+                metric_sqls.append(db_metric.sql_value)
+                self.sql_query.add_select(db_metric.sql_value)
 
     def __str__(self):
         return self.get_query()
@@ -145,8 +146,9 @@ class QueryBuilder:
 
 
 class TotalsBuilder(QueryBuilder):
-    def __init__(self, metric_keys: List[str], player_type: str):
+    def __init__(self, metrics_dict: Dict[str, DBMetric], metric_keys: List[str], player_type: str):
         super().__init__()
+        self.metrics_dict = metrics_dict
         self.metric_sql = []
         self.metric_keys = metric_keys
         self.name_column = 'name'
@@ -156,8 +158,9 @@ class TotalsBuilder(QueryBuilder):
 
 
 class PlaysBuilder(QueryBuilder):
-    def __init__(self, metric_keys: List[str], player_type: str):
+    def __init__(self, metrics_dict: Dict[str, DBMetric], metric_keys: List[str], player_type: str):
         super().__init__()
+        self.metrics_dict = metrics_dict
         self.metric_keys = metric_keys
         self.name_column = player_type + '_name'
         self.team_column = 'team_batting' if player_type == 'batter' else 'team_fielding'

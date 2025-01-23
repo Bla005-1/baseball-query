@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
+from typing import *
 from .static_data import ALL_SWINGS, CONTACT_RESULTS, BALL_RESULTS, SWINGING_STRIKE_RESULTS
 from .metrics_abc import VectorizedMetric
-from .db_tools import select_data
 from .utils import is_barreled
 
 
@@ -216,14 +216,14 @@ class PulledFB(VectorizedMetric):
 
 
 class ExpectedWeightedOBA(VectorizedMetric):
-    def __init__(self):
+    def __init__(self, probabilities: List[Dict] = None):
         super().__init__(['xwOBA', 'xwOBAcon'],
                          dependencies=('hit_speeds', 'launch_angles'))
         self.requires_row = True
+        self.probabilities = probabilities
 
     def calculate(self, temp_df: pd.DataFrame) -> dict:
-        probabilities = select_data('SELECT * FROM batted_ball_probabilities')
-        probabilities = pd.DataFrame(probabilities)
+        probabilities = pd.DataFrame(self.probabilities)
         ev_la_pairs = [
             (int((ev // 2) * 2), int((la // 3) * 3))
             for ev, la in zip(temp_df['hit_speeds'], temp_df['launch_angles'])

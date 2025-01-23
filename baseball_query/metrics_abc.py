@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict
 import pandas as pd
 import numpy as np
+import asyncio
+
 
 class VectorizedMetric(ABC):
     def __init__(self, names: str | List[str], dependencies: Tuple[str, ...]):
@@ -54,10 +56,8 @@ class MetricManager:
         self.groups = groups
         self.grouped_data = self._precompute_grouped_data(supplementary_df, groups)
 
-    def _precompute_grouped_data(self, supplementary_df, groups):
-        """
-        Precompute grouped data for the supplementary DataFrame.
-        """
+    @staticmethod
+    def _precompute_grouped_data(supplementary_df, groups):
         grouped_data = {}
         grouped = supplementary_df.groupby(groups)
         for key, group in grouped:
@@ -81,37 +81,29 @@ class MetricManager:
             if metric.requires_row:
                 metric.add_row(row)
             results.update(metric.calculate(temp_df))
-        '''
-        # Process iteration-based metrics
-        for metric in self.iteration_metrics:
-            metric.reset()
-
-        depend_groups: List[Tuple] = list(set(metric.dependencies for metric in self.iteration_metrics))
-        for dependencies in depend_groups:
-            if len(dependencies) == 1:
-                # Single dependency: Extract column as a Series
-                group = temp_df[dependencies[0]]
-                iterator = enumerate(group)
-            else:
-                # Multiple dependencies: Extract relevant columns and zip them
-                group = temp_df[dependencies]
-                iterator = enumerate(group.itertuples(index=False, name=None))  # Create row-wise tuples
-            # Process each item in the group
-            for i, values in iterator:
-                for metric in self.iteration_metrics:
-                    # Ensure the metric depends on the current dependencies
-                    if all(dep in metric.dependencies for dep in dependencies):
-                        metric.update(i, values)  # Pass single value for single dependency
-        for metric in self.iteration_metrics:
-            results.update(metric.finalize())
-        '''
         return results
 
-    def apply_metrics(self, df):
+    def apply_metrics(self, df: pd.DataFrame) -> pd.DataFrame:
         if not self.vectorized_metrics:
             return df
         metrics_df = df.apply(self.process_row, axis=1)
         return pd.concat([df, pd.DataFrame(metrics_df.tolist())], axis=1)
+
+    async def async_apply_metrics(self, df: pd.DataFrame, max_concurrent: int = 10) -> pd.DataFrame:
+        if not self.vectorized_metrics:
+            return df
+
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def process_row_async(row):
+            async with semaphore:
+                return await asyncio.to_thread(self.process_row, row)
+
+        tasks = [process_row_async(row) for _, row in df.iterrows()]
+        results = await asyncio.gather(*tasks)
+
+        metrics_df = pd.DataFrame(results)
+        return pd.concat([df, metrics_df], axis=1)
 
 
 class DBMetric:
@@ -125,11 +117,10 @@ class DBMetric:
         self.is_grouping = data.get('is_grouping', 0)
         self.metric_description = data.get('metric_description')
         self.hidden = data.get('hidden', 0)
+        self.dependencies = []
         dependencies = data.get('dependencies', '')
         if dependencies:
             self.dependencies = dependencies.split(',')
-        else:
-            self.dependencies = []
 
     def __repr__(self):
         return (

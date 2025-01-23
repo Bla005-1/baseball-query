@@ -1,19 +1,26 @@
 import logging
 from typing import *
-
 import numpy as np
 import pandas as pd
-from .processing import get_combined_data, process_batter_rows, process_pitcher_rows
+from .processing import Processor
 from .queries import TotalsBuilder, PlaysBuilder
-from .db_tools import constants_cache, select_data
+from .db_access_layer import DBManager
+from .metrics_abc import DBMetric
+
+import time
 
 log = logging.getLogger(__name__)
 
+
 class BaseballQuery:
-    def __init__(self, metric_keys: Iterable[str], player_type: str):
+    def __init__(self, metric_keys: Iterable[str], player_type: str, db_manager: DBManager,
+                 metrics_dict: Dict[str, DBMetric]):
+        self.db_manager = db_manager
+        self.metrics_dict = metrics_dict
         self.groups = []
         self.player_type = player_type
         self.all_metrics = list(metric_keys)
+
         metric_keys = list(metric_keys)
         totals_metrics = []
         plays_metrics = []
@@ -22,13 +29,13 @@ class BaseballQuery:
         self.supplementary_df = pd.DataFrame()
         for metric in metric_keys:
             try:
-                m = constants_cache.get_db_metrics_dict()[metric]
+                m = self.metrics_dict[metric]
             except KeyError:
-                log.error(f"Metric {metric} not found")
+                log.error(f'Metric {metric} not found')
                 continue
             if m.dependencies:
                 for dep in m.dependencies:
-                    dep_metric = constants_cache.get_db_metrics_dict()[dep]
+                    dep_metric = self.metrics_dict[dep]
                     if dep_metric.is_all_plays:
                         self.supplementary_metrics.append(dep)
                     else:
@@ -45,8 +52,8 @@ class BaseballQuery:
             totals_metrics.extend(groups)
         if len(plays_metrics) > 0:
             plays_metrics.extend(groups)
-        self.total_query = TotalsBuilder(totals_metrics, player_type)
-        self.play_query = PlaysBuilder(plays_metrics, player_type)
+        self.total_query = TotalsBuilder(metrics_dict, totals_metrics, player_type)
+        self.play_query = PlaysBuilder(metrics_dict, plays_metrics, player_type)
         for g in groups:
             self.add_group_column(g)
 
@@ -92,23 +99,34 @@ class BaseballQuery:
     def get_merge(self) -> List[str]:
         return self.groups
 
-    def fetch_data(self) -> pd.DataFrame:
-        df = get_combined_data(self.total_query, self.play_query, merge_on=self.get_merge())
+    def __str__(self):
+        return self.play_query.get_query() + '\n' + self.total_query.get_query()
+
+    async def fetch_data(self) -> pd.DataFrame:
+        start = time.perf_counter()
+        df = await self.db_manager.get_combined_data(self.total_query, self.play_query, merge_on=self.get_merge())
+        print(f'First fetch took {time.perf_counter() - start} seconds')
         depend = list(set(self.supplementary_metrics))
         if depend:
             depend.extend(self.groups)
-            supp_builder = PlaysBuilder(depend, self.player_type)
+            supp_builder = PlaysBuilder(self.metrics_dict, depend, self.player_type)
             supp_builder.sql_query.where = list(self.play_query.sql_query.where)
             supp_builder.args = list(self.play_query.args)
-            supplementary_data = select_data(supp_builder.get_query(), supp_builder.get_args())
+            start = time.perf_counter()
+            print(supp_builder.get_query())
+            supplementary_data = await self.db_manager.fetch_all(supp_builder.get_query(), supp_builder.get_args())
+            print(f'Supplementary fetch took {time.perf_counter() - start} seconds')
             self.supplementary_df = pd.DataFrame(supplementary_data)
             self.supplementary_df.fillna(np.nan)
         if df.empty:
             return df
+        p = Processor(self.db_manager)
+        start = time.perf_counter()
         if self.player_type == 'batter':
-            return process_batter_rows(df, self.all_metrics, self.groups, self.supplementary_df)
+            d = await p.calculate_batter_rows(df, self.all_metrics, self.groups, self.supplementary_df)
+            print(f'Batter calcs took {time.perf_counter() - start} seconds')
+            return d
         elif self.player_type == 'pitcher':
-            return process_pitcher_rows(df, self.all_metrics, self.groups, self.supplementary_df)
-
-    def __str__(self):
-        return self.play_query.get_query() + '\n' + self.total_query.get_query()
+            d = await p.calculate_pitcher_rows(df, self.all_metrics, self.groups, self.supplementary_df)
+            print(f'Pitcher calcs took {time.perf_counter() - start} seconds')
+            return d
