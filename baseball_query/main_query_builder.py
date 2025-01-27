@@ -3,7 +3,7 @@ from typing import *
 import numpy as np
 import pandas as pd
 from .processing import Processor
-from .queries import TotalsBuilder, PlaysBuilder
+from .queries import TotalsBuilder, PlaysBuilder, SQLJoinBuilder
 from .db_access_layer import DBManager
 from .metrics_abc import DBMetric
 
@@ -104,7 +104,9 @@ class BaseballQuery:
 
     async def fetch_data(self) -> pd.DataFrame:
         start = time.perf_counter()
-        df = await self.db_manager.get_combined_data(self.total_query, self.play_query, merge_on=self.get_merge())
+        joiner = SQLJoinBuilder(self.total_query, self.play_query, self.get_merge())
+        data = await self.db_manager.fetch_all(joiner.build_join_query())
+        df = pd.DataFrame(data)
         print(f'First fetch took {time.perf_counter() - start} seconds')
         depend = list(set(self.supplementary_metrics))
         if depend:

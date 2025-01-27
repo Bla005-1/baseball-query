@@ -173,3 +173,67 @@ class PlaysBuilder(QueryBuilder):
                 continue
         self.process_metrics(self.metric_keys, self.metric_sql)
         self.sql_query.set_from_table('all_plays')
+
+
+class SQLJoinBuilder:
+    def __init__(self, query1: QueryBuilder, query2: QueryBuilder, merge_on: List[str], join_type: str = "INNER"):
+        self.query1 = query1
+        self.query2 = query2
+        self.merge_on = merge_on
+        self.join_type = join_type.upper()  # Ensure join type is uppercase (e.g., INNER, LEFT, etc.)
+
+    def build_join_query(self) -> str:
+        # Ensure both queries have their SELECT statements
+        query1_sql = self.query1.sql_query
+        query2_sql = self.query2.sql_query
+
+        if not query1_sql.select or not query2_sql.select:
+            raise ValueError('Both queries must have SELECT clauses before joining.')
+
+        # Combine SELECT statements
+        select_clause = (
+            ', '.join([f't1.{col}' for col in query1_sql.select]) +
+            ', ' +
+            ', '.join([f't2.{col}' for col in query2_sql.select])
+        )
+
+        # FROM and JOIN clause
+        from_clause = f'{query1_sql.from_table} AS t1'
+        join_clause = f'{self.join_type} JOIN {query2_sql.from_table} AS t2'
+
+        # ON clause for merging
+        on_conditions = [f't1.{col} = t2.{col}' for col in self.merge_on]
+        on_clause = f'ON {" AND ".join(on_conditions)}'
+
+        # WHERE clauses
+        where_conditions = list(set(query1_sql.where + query2_sql.where))
+        where_clause = f'WHERE {" AND ".join(where_conditions)}' if where_conditions else ''
+
+        # GROUP BY clause
+        group_by_clause = (
+            f'GROUP BY {", ".join(list(set(query1_sql.group_by + query2_sql.group_by)))}'
+            if query1_sql.group_by or query2_sql.group_by
+            else ""
+        )
+
+        # ORDER BY clause
+        order_by_clause = (
+            f'ORDER BY {", ".join(list(set(query1_sql.order_by + query2_sql.order_by)))}'
+            if query1_sql.order_by or query2_sql.order_by
+            else ""
+        )
+
+        # Build the full query
+        query = (
+            f'SELECT {select_clause} '
+            f'FROM {from_clause} '
+            f'{join_clause} {on_clause} '
+            f'{where_clause} '
+            f'{group_by_clause} '
+            f'{order_by_clause}'
+        ).strip()
+
+        return query
+
+    def get_args(self) -> List[str]:
+        return list(set(self.query1.get_args() + self.query2.get_args()))
