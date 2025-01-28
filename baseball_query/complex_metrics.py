@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import *
 from .static_data import ALL_SWINGS, CONTACT_RESULTS, BALL_RESULTS, SWINGING_STRIKE_RESULTS
-from .metrics_abc import VectorizedMetric
+from .metric_manager import VectorizedMetric
 from .utils import is_barreled
 
 

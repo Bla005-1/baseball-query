@@ -5,4 +5,4 @@ from .processing import *
 from .queries import *
 from .static_data import *
 from .errors import *
-from .builder_factory import BaseballStats
+from .query_engine import BaseballStats

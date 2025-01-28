@@ -1,6 +1,6 @@
 from typing import List, Tuple, Dict
 from .errors import EmptyQueryError
-from .metrics_abc import DBMetric
+from .metric_manager import DBMetric
 
 
 class SQLQuery:

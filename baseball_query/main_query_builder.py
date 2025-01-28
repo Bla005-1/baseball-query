@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from .processing import Processor
 from .queries import TotalsBuilder, PlaysBuilder, SQLJoinBuilder
-from .db_access_layer import DBManager
-from .metrics_abc import DBMetric
+from .async_db import DBManager
+from .metric_manager import DBMetric
 
 import time
 

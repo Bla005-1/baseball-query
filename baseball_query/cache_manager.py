@@ -1,7 +1,7 @@
 import time
 from typing import List, Tuple, Dict
-from .metrics_abc import DBMetric
-from .db_access_layer import DBManager
+from .metric_manager import DBMetric
+from .async_db import DBManager
 
 
 class ConstantsCache:
@@ -85,4 +85,3 @@ class ConstantsCache:
             'timestamp': time.time()
         }
         return table_columns
-
