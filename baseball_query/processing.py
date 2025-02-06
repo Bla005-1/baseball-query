@@ -2,8 +2,8 @@ from typing import *
 import pandas as pd
 import math
 from .complex_metrics import COMPLEX_METRICS_DICT, ExpectedWeightedOBA
-from .db_access_layer import DBManager
-from .metrics_abc import MetricManager
+from .async_db import DBManager
+from .metric_manager import MetricManager
 
 
 batter_default_metrics = ('name', 'league', 'pitches', 'bip', 'percentile_90','launch_angles', 'avg_ev', 'max_ev',

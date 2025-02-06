@@ -3,7 +3,7 @@ import os
 import pandas as pd
 from typing import *
 from .errors import QueryExecutionError, EmptyQueryError
-from .queries import QueryBuilder
+from .queries import SingleQueryBuilder
 
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -69,7 +69,7 @@ class DBManager:
         results = await self.fetch_all(query, metric_names)
         return {row['metric_name']: row['sql_value'] for row in results}
 
-    async def get_combined_data(self, query1: QueryBuilder, query2: QueryBuilder, merge_on: Iterable[str]) -> pd.DataFrame:
+    async def get_combined_data(self, query1: SingleQueryBuilder, query2: SingleQueryBuilder, merge_on: Iterable[str]) -> pd.DataFrame:
         if query1 and query2:
             data1 = await self.fetch_all(query1.get_query(), query1.get_args())
             data2 = await self.fetch_all(query2.get_query(), query2.get_args())
