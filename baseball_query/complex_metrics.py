@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import *
-from .metric_manager import VectorizedMetric
+from .abc import VectorizedMetric
 
 
 class PulledFB(VectorizedMetric):

@@ -4,6 +4,7 @@ import pandas as pd
 from typing import *
 from .errors import QueryExecutionError, EmptyQueryError
 from .queries import SingleQueryBuilder
+from .abc import BaseDBManager
 
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
@@ -14,7 +15,7 @@ DB_CONFIG = {
 }
 
 
-class DBManager:
+class DBManager(BaseDBManager):
     def __init__(self, db_config: Dict[str, str] = None, pool_size: int = 10):
         if db_config is None:
             self.db_config = DB_CONFIG

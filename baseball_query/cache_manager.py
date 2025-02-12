@@ -1,7 +1,6 @@
 import time
 from typing import List, Tuple, Dict
-from .metric_manager import DBMetric
-from .async_db import DBManager
+from .abc import BaseDBManager, DBMetric
 
 
 class ConstantsCache:
@@ -12,7 +11,7 @@ class ConstantsCache:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, db_manager: DBManager, ttl: int = 3600):
+    def __init__(self, db_manager: BaseDBManager, ttl: int = 3600):
         if not hasattr(self, 'cache'):
             self.db_manager = db_manager
             self.ttl = ttl

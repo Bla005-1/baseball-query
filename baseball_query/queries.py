@@ -1,53 +1,7 @@
 from typing import List, Tuple, Self
 from .errors import EmptyQueryError
-from .metric_manager import DBMetric
-from abc import ABC, abstractmethod
 from .sql_query import SQLQuery
-
-class BaseQueryBuilder(ABC):
-    def __init__(self, player_type):
-        self.player_type = player_type
-        self.empty = False
-        self.metric_names: List[str] = []
-        self.group_columns: List[str] = []
-
-    @abstractmethod
-    def get_query(self) -> str:
-        pass
-
-    @abstractmethod
-    def get_args(self) -> List[str]:
-        pass
-
-    @abstractmethod
-    def add_select(self, metric: DBMetric) -> Self:
-        pass
-
-    @abstractmethod
-    def add_group_by(self, column: str | List[str]) -> Self:
-        pass
-
-    @staticmethod
-    def _parse_select(expression: str) -> Tuple:
-        if ' AS ' in expression:
-            clauses = expression.split(' AS ')
-            alias = clauses[1].strip()
-        else:
-            alias = expression
-        return expression, alias
-
-    def get_group_columns(self) -> List[str]:
-        return self.group_columns
-
-    def get_metric_names(self) -> List[str]:
-        return self.metric_names
-
-    def __str__(self):
-        return self.get_query()
-
-    def __bool__(self):
-        self.get_query()
-        return not self.empty
+from .abc import BaseQueryBuilder, DBMetric
 
 
 class SingleQueryBuilder(BaseQueryBuilder):
@@ -57,6 +11,9 @@ class SingleQueryBuilder(BaseQueryBuilder):
         self.args = []
         self.name_column = 'name'
         self.team_column = 'team_name'
+
+    def set_table(self, table: str):
+        self.sql_query.set_from_table(table)
 
     def add_name(self, name_values: str | List[str]) -> Self:
         self.add_dynamic_where(self.name_column, name_values)
@@ -85,11 +42,15 @@ class SingleQueryBuilder(BaseQueryBuilder):
             self.args.extend(args)
         return self
 
-    def order_by(self, column: str) -> Self:
-        self.sql_query.add_order_by(column)
+    def order_by(self, column: str | List[str]) -> Self:
+        if isinstance(column, str):
+            self.sql_query.add_order_by(column)
+        else:
+            for c in column:
+                self.sql_query.add_order_by(c)
         return self
 
-    def add_group_by(self, column: str | List[str]) -> Self:
+    def group_by(self, column: str | List[str]) -> Self:
         if isinstance(column, str):
             self.sql_query.add_group_by(column)
             self.group_columns.append(column)
@@ -101,7 +62,7 @@ class SingleQueryBuilder(BaseQueryBuilder):
 
     def add_dynamic_where(self, column: str, values: str | List[str]) -> Self:
         if not values:
-            self.add_group_by(column)
+            self.group_by(column)
             return self
         if isinstance(values, list):
             if len(values) == 1:
@@ -124,18 +85,25 @@ class SingleQueryBuilder(BaseQueryBuilder):
     def get_args(self) -> List[str]:
         return self.args
 
+    def update_selects(self, e: str):
+        e, alias = self._parse_select(e)
+        self.sql_query.add_select(e)
+        self.metric_names.append(alias)
+
+    def get_where_clauses(self) -> List[str]:
+        return self.sql_query.where
+
     def add_select(self, metric: DBMetric) -> Self:
-        def update_selects(e: str):
-            e, alias = self._parse_select(e)
-            self.sql_query.add_select(e)
-            self.metric_names.append(alias)
+        if metric.is_python:
+            self.python_metrics.append(metric.metric_name)
+            return self
         expression = metric.sql_value
-        if '|' in expression:  # might need to change to ! or ~
-            values = expression.split('|')
+        if '!!' in expression:  # might need to change to ! or ~
+            values = expression.split('!!')
             for v in values:
-                update_selects(v)
+                self.update_selects(v)
         elif expression:
-            update_selects(expression)
+            self.update_selects(expression)
         return self
 
     def __str__(self):
@@ -151,118 +119,23 @@ class TotalsBuilder(SingleQueryBuilder):
         super().__init__(player_type)
         self.name_column = 'name'
         self.team_column = 'team_name'
-        self.sql_query.set_from_table('hitters' if player_type == 'batter' else 'pitchers')
+        self.set_table('hitters' if player_type == 'batter' else 'pitchers')
 
+    def add_select(self, metric: DBMetric) -> Self:
+        if ((metric.is_totals_batter and self.player_type == 'batter') or
+            (metric.is_totals_pitcher and self.player_type == 'pitcher') or
+            metric.is_python):
+            return super().add_select(metric)
+        return self
 
 class PlaysBuilder(SingleQueryBuilder):
     def __init__(self, player_type: str):
         super().__init__(player_type)
         self.name_column = player_type + '_name'
         self.team_column = 'team_batting' if player_type == 'batter' else 'team_fielding'
-        self.sql_query.set_from_table('all_plays')
+        self.set_table('all_plays')
 
     def add_select(self, metric: DBMetric) -> Self:
-        if not metric.is_all_plays:
-            return self
-        def update_selects(e: str):
-            e, alias = self._parse_select(e)
-            self.sql_query.add_select(e)
-            self.metric_names.append(alias)
-        expression = metric.sql_value
-        if '|' in expression:  # might need to change to ! or ~
-            values = expression.split('|')
-            for v in values:
-                update_selects(v)
-        elif expression:
-            update_selects(expression)
+        if metric.is_all_plays or metric.is_python:
+            return super().add_select(metric)
         return self
-
-class SQLJoinBuilder:
-    def __init__(self, query1: SingleQueryBuilder, query2: SingleQueryBuilder, merge_on: List[str], join_type: str = 'INNER'):
-        """
-        :param query1: First query builder.
-        :param query2: Second query builder.
-        :param merge_on: List of tuples specifying column mappings between the two tables (e.g., [('name', 'batter_name'), ('player_id', 'batter_id')]).
-        :param join_type: Type of SQL join (e.g., INNER, LEFT).
-        """
-        if isinstance(query1, PlaysBuilder):
-            self.query1 = query1
-            self.query2 = query2
-        else:
-            self.query1 = query2
-            self.query2 = query1
-        self.merge_on = merge_on
-        self.join_type = join_type.upper()  # Ensure join type is uppercase (e.g., INNER, LEFT, etc.)
-
-    def build_join_query(self) -> str:
-        if self.query1 and not self.query2:
-            return self.query1.get_query()
-        elif self.query2 and not self.query1:
-            return self.query2.get_query()
-
-        query1_sql = self.query1.sql_query
-        query2_sql = self.query2.sql_query
-
-        if not query1_sql.select or not query2_sql.select:
-            raise ValueError('Both queries must have SELECT clauses before joining.')
-
-        # Pre-aggregate Query1
-        pre_aggregated_query1 = (
-            f"(SELECT {', '.join(query1_sql.select)} "
-            f"FROM {query1_sql.from_table} "
-            f"{'WHERE ' + ' AND '.join(query1_sql.where) if query1_sql.where else ''} "
-            f"GROUP BY {', '.join(query1_sql.group_by)}) AS t1"
-        )
-
-        # Pre-aggregate Query2
-        pre_aggregated_query2 = (
-            f"(SELECT {', '.join(query2_sql.select)} "
-            f"FROM {query2_sql.from_table} "
-            f"{'WHERE ' + ' AND '.join(query2_sql.where) if query2_sql.where else ''} "
-            f"GROUP BY {', '.join(query2_sql.group_by)}) AS t2"
-        )
-
-        # Combine SELECT statements
-        def format_column(column: str, table: str) -> str:
-            if ' AS ' in column:
-                column = column.split(' AS ')[1].strip()
-            return f'{table}.{column}'
-
-        select_clause = (
-            ', '.join([format_column(col, 't1') for col in query1_sql.select]) +
-            ', ' +
-            ', '.join([format_column(col, 't2') for col in query2_sql.select])
-        )
-
-        # Special case: dynamically map name columns
-        def resolve_name_join(column):
-            return f't1.{column} = t2.{column}'
-
-        # JOIN clause with special case for name columns
-        on_conditions = [resolve_name_join(col) for col in self.merge_on]
-        on_clause = f'ON {" AND ".join(on_conditions)}'
-
-        # ORDER BY clause
-        order_by_clause = (
-            f'ORDER BY {", ".join(query1_sql.order_by)}'
-            if query1_sql.order_by
-            else ""
-        )
-
-        # Build the full query
-        query = (
-            f'SELECT {select_clause} '
-            f'FROM {pre_aggregated_query1} '
-            f'{self.join_type} JOIN {pre_aggregated_query2} {on_clause} '
-            f'{order_by_clause}'
-        ).strip()
-        print(query)
-        return query
-
-
-    def get_args(self) -> List[str]:
-        if self.query1 and not self.query2:
-            return self.query1.get_args()
-        elif self.query2 and not self.query1:
-            return self.query2.get_args()
-        return self.query1.get_args() + self.query2.get_args()
