@@ -6,5 +6,5 @@ from .queries import TotalsBuilder, PlaysBuilder, SingleQueryBuilder
 from .abc import *
 from .static_data import *
 from .errors import *
-from .query_engine import BaseballStats
+from .query_engine import BaseballQueryClient
 from .sql_query import SQLQuery, BaseStrSQLQuery

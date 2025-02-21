@@ -8,7 +8,7 @@ from .abc import BaseQueryFactory, BuilderT
 from .processing import Processor
 
 
-class BaseballStats(BaseQueryFactory):
+class BaseballQueryClient(BaseQueryFactory):
     def __init__(self, db_config: Dict = None, pool_size: int = 10):
         """
         Initialize the async BaseballStats.
