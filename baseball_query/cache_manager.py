@@ -1,16 +1,9 @@
 import time
-from typing import List, Tuple, Dict
-from .abc import BaseDBManager, DBMetric
+from typing import List, Dict
+from .abc import BaseDBManager, DBMetric, BaseCache
 
 
-class ConstantsCache:
-    _instance = None  # Class-level variable to store the single instance
-
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
+class ConstantsCache(BaseCache):
     def __init__(self, db_manager: BaseDBManager, ttl: int = 3600):
         if not hasattr(self, 'cache'):
             self.db_manager = db_manager
@@ -65,10 +58,6 @@ class ConstantsCache:
             'timestamp': time.time()
         }
         return metrics
-
-    @staticmethod
-    def get_tables() -> Tuple[str, ...]:
-        return 'league_averages', 'hitters', 'pitchers', 'fielders', 'all_plays'
 
     async def get_table_columns_dict(self):
         key = 'TABLE_COLUMNS'

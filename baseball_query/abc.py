@@ -54,7 +54,7 @@ class BaseQueryBuilder(ABC):
         pass
 
     @abstractmethod
-    def add_raw_where(self, where_clause: str, args: List[str] | str = None) -> Self:
+    def add_raw_where(self, where_clause: str, args: Optional[List[str] | str] = None) -> Self:
         pass
 
     @abstractmethod
@@ -87,11 +87,10 @@ class BaseQueryBuilder(ABC):
     def get_order_columns(self) -> List[str]:
         return self.order_columns
 
-
-    def __str__(self):
+    def __str__(self) -> str:
         return self.get_query()
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         self.get_query()
         return not self.empty
 
@@ -101,11 +100,11 @@ class BaseDBManager(ABC):
         pass
 
     @abstractmethod
-    async def fetch_all(self, query: str, params: Tuple | Dict | List = None) -> List[Dict]:
+    async def fetch_all(self, query: str, params: Optional[Tuple | Dict | List] = None) -> List[Dict]:
         pass
 
     @abstractmethod
-    async def execute_update(self, query: str, params: Tuple | Dict = None) -> int:
+    async def execute_update(self, query: str, params: Optional[Tuple | Dict | List] = None) -> int:
         pass
 
     @abstractmethod
@@ -117,7 +116,43 @@ class BaseDBManager(ABC):
         pass
 
     @abstractmethod
-    async def fetch_metric_sqls(self, metric_names: List[str]) -> Dict[str, str]:
+    async def fetch_metric_sqls(self, metric_names: List[str]) -> Dict:
+        pass
+
+class BaseCache(ABC):
+    cache: Any
+    db_manager: BaseDBManager
+
+    @abstractmethod
+    def get_cache_entry(self, key: str) -> Any | None:
+        pass
+
+    @abstractmethod
+    async def get_totals_batter(self) -> List[str]:
+        pass
+
+    @abstractmethod
+    async def get_totals_pitcher(self) -> List[str]:
+        pass
+
+    @abstractmethod
+    async def get_plays_metrics(self) -> List[str]:
+        pass
+
+    @abstractmethod
+    async def get_group_metrics(self) -> List[str]:
+        pass
+
+    @abstractmethod
+    async def get_metrics_dict(self) -> Dict[str, DBMetric]:
+        pass
+
+    @staticmethod
+    def get_tables() -> Tuple[str, ...]:
+        return 'league_averages', 'hitters', 'pitchers', 'fielders', 'all_plays'
+
+    @abstractmethod
+    async def get_table_columns_dict(self):
         pass
 
 
@@ -137,7 +172,7 @@ class BaseQueryFactory(ABC):
 
     @abstractmethod
     async def create_query(self, metrics: List[str], player_type: str,
-                           builder_cls: Type[BuilderT] = 'TotalsBuilder') -> BuilderT:
+                           builder_cls: Optional[Type[BuilderT]] = None) -> BuilderT:
         pass
 
     @abstractmethod
@@ -154,7 +189,7 @@ class VectorizedMetric(ABC):
         self.original_row = pd.Series()
 
     @abstractmethod
-    def calculate(self, temp_df: pd.DataFrame) -> dict:
+    def calculate(self, temp_df: pd.DataFrame) -> Dict:
         """Calculate the metric using vectorized operations."""
         pass
 

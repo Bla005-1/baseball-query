@@ -1,4 +1,4 @@
-from typing import List, Dict, Type
+from typing import List, Dict, Type, Optional, overload
 import pandas as pd
 import time
 from .async_db import DBManager
@@ -29,13 +29,28 @@ class BaseballQueryClient(BaseQueryFactory):
         """
         await self.db_manager.close()
 
-    async def create_query(self, metrics: List[str], player_type: str,
-                           builder_cls: Type[BuilderT] = TotalsBuilder) -> BuilderT:
-        """
-        Factory method to create an async BaseballQuery instance.
-        """
+    @overload
+    async def create_query(self, metrics: List[str], player_type: str, builder_cls: None = None) -> TotalsBuilder:
+        ...
+
+    @overload
+    async def create_query(
+            self,
+            metrics: List[str],
+            player_type: str,
+            builder_cls: Type[BuilderT] = None
+    ) -> BuilderT:
+        ...
+
+    async def create_query(
+            self,
+            metrics: List[str],
+            player_type: str,
+            builder_cls: Optional[Type[BuilderT]] = None
+    ) -> BuilderT:
         metrics_dict = await self.cache.get_metrics_dict()
         builder = builder_cls(player_type)
+
         def add_metric(metric):
             if metric := metrics_dict.get(metric):
                 if metric.dependencies:
@@ -47,6 +62,7 @@ class BaseballQueryClient(BaseQueryFactory):
                 if metric.is_grouping:
                     builder.group_by(metric.metric_name)
                 builder.add_select(metric)
+
         for user_metric in metrics:
             add_metric(user_metric)
         return builder
