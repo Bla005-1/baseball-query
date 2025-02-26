@@ -25,15 +25,19 @@ class DBManager(BaseDBManager):
         self.pool_size = pool_size
 
     async def initialize_pool(self):
-        self.pool = await aiomysql.create_pool( host=self.db_config['host'],
+        if self.pool is None:
+            self.pool = await aiomysql.create_pool(
+                host=self.db_config['host'],
                 user=self.db_config['user'],
                 password=self.db_config['password'],
                 db=self.db_config['database'],
                 charset=self.db_config['charset'],
                 autocommit=True,
-                maxsize=self.pool_size)
+                maxsize=self.pool_size
+            )
 
     async def fetch_all(self, query: str, params: Tuple | Dict | List = None) -> List[Dict]:
+        await self.initialize_pool()
         async with self.pool.acquire() as connection:
             async with connection.cursor(aiomysql.DictCursor) as cursor:
                 try:
@@ -43,6 +47,7 @@ class DBManager(BaseDBManager):
                     raise QueryExecutionError(message=str(e), query1=query)
 
     async def execute_update(self, query: str, params: Tuple | Dict = None) -> int:
+        await self.initialize_pool()
         async with self.pool.acquire() as connection:
             async with connection.cursor(aiomysql.DictCursor) as cursor:
                 try:

@@ -17,9 +17,11 @@ class BaseballQueryClient(BaseQueryFactory):
         """
         self.db_manager = DBManager(db_config, pool_size)
         self.cache = ConstantsCache(self.db_manager)
+        self._initialized = False
 
     async def initialize(self):
         await self.db_manager.initialize_pool()
+        self._initialized = True
 
     async def close(self):
         """

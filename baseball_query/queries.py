@@ -1,4 +1,4 @@
-from typing import List, Tuple, Self
+from typing import List, Tuple, Self, Dict
 from .errors import EmptyQueryError
 from .sql_query import SQLQuery
 from .abc import BaseQueryBuilder, DBMetric
@@ -33,6 +33,19 @@ class SingleQueryBuilder(BaseQueryBuilder):
     def add_year(self, year: str) -> Self:
         self.add_dynamic_where('season', year)
         return self
+
+    def add_filters(self, filters: Dict) -> Self:
+        for column, value in filters.items():
+            if column == 'name':
+                self.add_name(value)
+            elif column == 'team_name':
+                self.add_team(value)
+            elif column == 'dates':
+                self.add_dates(value)
+            elif column == 'year':
+                self.add_year(value)
+            else:
+                self.add_dynamic_where(column, value)
 
     def add_raw_where(self, where_clause: str, args: List[str] | str = None) -> Self:
         self.sql_query.add_where(where_clause)
