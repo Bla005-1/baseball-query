@@ -48,6 +48,8 @@ class BaseballQueryClient(BaseQueryFactory):
             player_type: str,
             builder_cls: Optional[Type[BuilderT]] = None
     ) -> BuilderT:
+        if builder_cls is None:
+            builder_cls = TotalsBuilder
         metrics_dict = await self.cache.get_metrics_dict()
         builder = builder_cls(player_type)
 
