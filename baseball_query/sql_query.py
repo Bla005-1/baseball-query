@@ -1,4 +1,5 @@
 from .errors import EmptyQueryError
+from typing import Self
 
 class SQLQuery:
     def __init__(self):
@@ -8,22 +9,27 @@ class SQLQuery:
         self.group_by = []
         self.order_by = []
 
-    def add_select(self, column: str):
+    def add_select(self, column: str) -> Self:
         if column not in self.select:
             self.select.append(column)
+        return self
 
-    def set_from_table(self, table: str):
+    def set_from_table(self, table: str) -> Self:
         self.from_table = table
+        return self
 
-    def add_where(self, condition: str):
+    def add_where(self, condition: str) -> Self:
         self.where.append(condition)
+        return self
 
-    def add_group_by(self, column: str):
+    def add_group_by(self, column: str) -> Self:
         if column not in self.group_by:
             self.group_by.append(column)
+        return self
 
-    def add_order_by(self, column: str):
+    def add_order_by(self, column: str) -> Self:
         self.order_by.append(column)
+        return self
 
     def build_query(self) -> str:
         if not self.from_table:

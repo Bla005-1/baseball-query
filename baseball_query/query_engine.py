@@ -69,11 +69,13 @@ class BaseballQueryClient(BaseQueryFactory):
             add_metric(user_metric)
         return builder
 
-    async def fetch_data(self, query_builder: BuilderT) -> pd.DataFrame:
+    async def fetch_data(self, query_builder: BuilderT, skip_processor = False) -> pd.DataFrame:
         start = time.perf_counter()
         data = await self.db_manager.fetch_all(query_builder.get_query(), query_builder.get_args())
         df = pd.DataFrame(data)
         print(f'First fetch took {time.perf_counter() - start} seconds')
+        if skip_processor:
+            return df
         p = Processor(query_builder, self)
         start = time.perf_counter()
         if query_builder.player_type == 'batter':
