@@ -46,6 +46,8 @@ class Processor:
                 builder.add_dynamic_where(group_column, value)
 
         for where in self.query_builder.get_where_clauses():
+            if 'name ' in where:
+                continue
             builder.add_raw_where(where)
         builder.args.extend(self.query_builder.get_args())
         data = await self.db_manager.fetch_all(builder.get_query(), builder.get_args())
