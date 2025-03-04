@@ -69,7 +69,7 @@ class BaseQueryBuilder(ABC):
     def _parse_select(expression: str) -> Tuple:
         if ' AS ' in expression:
             clauses = expression.split(' AS ')
-            alias = clauses[1].strip()
+            alias = clauses[-1].strip()
         else:
             alias = expression
         return expression, alias
@@ -176,7 +176,7 @@ class BaseQueryFactory(ABC):
         pass
 
     @abstractmethod
-    async def fetch_data(self, query_builder: BuilderT) -> pd.DataFrame:
+    async def fetch_data(self, query_builder: BuilderT, skip_processor: bool = False) -> pd.DataFrame:
         pass
 
 class VectorizedMetric(ABC):
