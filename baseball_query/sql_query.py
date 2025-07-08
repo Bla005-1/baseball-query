@@ -48,11 +48,40 @@ class SQLQuery:
     def __str__(self):
         return self.build_query()
 
+    def copy(self) -> 'SQLQuery':
+        new_query = SQLQuery()
+        new_query.select = self.select[:]  # shallow copy of list
+        new_query.from_table = self.from_table  # str, immutable
+        new_query.where = self.where[:]  # shallow copy
+        new_query.group_by = self.group_by[:]  # shallow copy
+        new_query.order_by = self.order_by[:]  # shallow copy
+        return new_query
+
 
 class BaseStrSQLQuery(SQLQuery):
     def __init__(self, base_query: str):
         super().__init__()
         self.base_query = base_query
+        select_part, sep, from_part = base_query.rpartition(' FROM ')
+        if not sep:
+            raise ValueError('Invalid base query: missing FROM clause')
+        self.from_table = from_part.strip()
+        columns = []
+        current = []
+        parens = 0
+        for char in select_part.replace('SELECT', '', 1):
+            if char == ',' and parens == 0:
+                columns.append(''.join(current).strip())
+                current = []
+            else:
+                current.append(char)
+                if char == '(':
+                    parens += 1
+                elif char == ')':
+                    parens = max(parens - 1, 0)
+        if current:
+            columns.append(''.join(current).strip())
+        self.select = columns
 
     def build_query(self) -> str:
         query = self.base_query
