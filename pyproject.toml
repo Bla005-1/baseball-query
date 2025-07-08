@@ -1,6 +1,6 @@
 [project]
 name = "baseball-query"
-version = "3.0.6"
+version = "3.0.7"
 description = "Backend management for a baseball stats db"
 authors = [
     {name = "Bla005-1",email = "blasupercell@gmail.com"}
