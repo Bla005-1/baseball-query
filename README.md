@@ -42,12 +42,3 @@ async def main():
 asyncio.run(main())
 ```
 
-## Running Tests
-
-Tests are written with `pytest`:
-
-```bash
-pytest
-```
-
-They require the development dependencies listed in `pyproject.toml`.
