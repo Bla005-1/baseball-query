@@ -104,8 +104,8 @@ class Processor:
 
     async def calculate_batter_rows(self, df: pd.DataFrame) -> pd.DataFrame:
         python_metrics = self.query_builder.python_metrics
-        if 'OBS' in python_metrics:
-            df['OBS'] = df['OBP'] + df['SLG']
+        if 'OPS' in python_metrics:
+            df['OPS'] = df['OBP'] + df['SLG']
         return await self.create_and_calculate_metrics(df)
 
     async def calculate_pitcher_rows(self, df: pd.DataFrame) -> pd.DataFrame:

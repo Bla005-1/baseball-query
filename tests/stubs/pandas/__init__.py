@@ -10,7 +10,15 @@ class DataFrame:
         return len(self.data)
 
     def __getitem__(self, item):
-        return [row[item] for row in self.data]
+        if isinstance(item, list):
+            return DataFrame([{k: row[k] for k in item} for row in self.data])
+        return Series([row[item] for row in self.data])
+
+    def __setitem__(self, key, value):
+        for row, val in zip(self.data, value):
+            row[key] = val
+        if key not in self.columns:
+            self.columns.append(key)
 
     class _ILoc:
         def __init__(self, outer):
@@ -24,8 +32,9 @@ class DataFrame:
         return self._ILoc(self)
 
 
-class Series(dict):
-    pass
+class Series(list):
+    def __add__(self, other):
+        return Series([a + b for a, b in zip(self, other)])
 
 
 def merge(df1, df2, on=None, how='inner'):
