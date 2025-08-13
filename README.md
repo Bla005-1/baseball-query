@@ -1,17 +1,8 @@
 # Baseball Query
 
-Backend management for a baseball stats database.  
+Backend management for a personal baseball stats database.  
 This library provides helpers for building SQL queries, fetching data asynchronously and processing complex baseball metrics.
 
-## Installation
-
-Clone the repository and install the package with pip:
-
-```bash
-pip install -e .
-```
-
-The package depends on `pandas`, `numpy`, `aiomysql` and `pymysql`.
 
 ## Usage
 
