@@ -8,6 +8,8 @@ from .processing import Processor
 
 
 class BaseballQueryClient(BaseQueryFactory):
+    """Asynchronous client for constructing and running baseball queries."""
+
     def __init__(self, db_config: Dict = None, pool_size: int = 10):
         """
         Initialize the async BaseballStats.

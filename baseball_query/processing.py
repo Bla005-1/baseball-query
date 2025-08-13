@@ -21,6 +21,8 @@ def add_coordinates(coord_str: str) -> Tuple[float, float]:
 
 
 class Processor:
+    """Handle post-query metric calculations for each result row."""
+
     def __init__(self, query_builder: BaseQueryBuilder, query_factory: BaseQueryFactory, max_concurrent: int = 10):
         self.query_builder = query_builder
         self.query_factory = query_factory

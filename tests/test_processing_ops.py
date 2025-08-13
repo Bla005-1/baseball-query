@@ -5,6 +5,8 @@ from baseball_query.processing import Processor
 
 
 class DummyQueryBuilder:
+    """Minimal query builder stub used in Processor tests."""
+
     player_type = 'batter'
     python_metrics = ['OPS']
 
@@ -13,6 +15,8 @@ class DummyQueryBuilder:
 
 
 class DummyFactory:
+    """Stub factory providing a placeholder db_manager."""
+
     def __init__(self):
         self.db_manager = None
 
