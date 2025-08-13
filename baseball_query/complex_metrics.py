@@ -5,6 +5,8 @@ from .abc import VectorizedMetric
 
 
 class PulledFB(VectorizedMetric):
+    """Compute pulled fly ball percentage and average exit velocity."""
+
     def __init__(self):
         super().__init__(['pulled_FB_percent', 'avg_ev_on_pulled_FB'],
                          dependencies=('trajectories', 'hit_speeds', 'hit_coordinates', 'bat_sides'))
@@ -35,6 +37,8 @@ class PulledFB(VectorizedMetric):
 
 
 class ExpectedWeightedOBA(VectorizedMetric):
+    """Estimate expected wOBA based on batted ball probabilities."""
+
     def __init__(self, probabilities: List[Dict] = None):
         super().__init__(['xwOBA', 'xwOBAcon'],
                          dependencies=('hit_speeds', 'launch_angles'))
@@ -97,6 +101,8 @@ class ExpectedWeightedOBA(VectorizedMetric):
 
 
 class Percentile90(VectorizedMetric):
+    """Calculate the 90th percentile of hit speeds."""
+
     def __init__(self):
         super().__init__('percentile_90', dependencies=('hit_speeds',))
 

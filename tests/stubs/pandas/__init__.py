@@ -1,4 +1,6 @@
 class DataFrame:
+    """Tiny stand-in for pandas.DataFrame used in tests."""
+
     def __init__(self, data=None, columns=None):
         self.data = list(data or [])
         self.columns = columns or (list(self.data[0].keys()) if self.data else [])
@@ -21,6 +23,8 @@ class DataFrame:
             self.columns.append(key)
 
     class _ILoc:
+        """Minimal implementation of DataFrame.iloc."""
+
         def __init__(self, outer):
             self.outer = outer
 
@@ -33,6 +37,8 @@ class DataFrame:
 
 
 class Series(list):
+    """Lightweight list subclass to mimic pandas.Series."""
+
     def __add__(self, other):
         return Series([a + b for a, b in zip(self, other)])
 

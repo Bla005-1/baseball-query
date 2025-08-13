@@ -5,6 +5,8 @@ from .abc import BaseQueryBuilder, DBMetric
 
 
 class SingleQueryBuilder(BaseQueryBuilder):
+    """Build SQL queries for a single stats table."""
+
     def __init__(self, player_type: str = '', sql_query: SQLQuery = None):
         super().__init__(player_type)
         self.sql_query = sql_query or SQLQuery()
@@ -131,6 +133,8 @@ class SingleQueryBuilder(BaseQueryBuilder):
 
 
 class TotalsBuilder(SingleQueryBuilder):
+    """Specialized builder for season total statistics."""
+
     def __init__(self, player_type: str):
         super().__init__(player_type)
         self.name_column = 'name'
@@ -145,6 +149,8 @@ class TotalsBuilder(SingleQueryBuilder):
         return self
 
 class PlaysBuilder(SingleQueryBuilder):
+    """Builder for queries against the all plays table."""
+
     def __init__(self, player_type: str):
         super().__init__(player_type)
         self.name_column = player_type + '_name'

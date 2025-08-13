@@ -5,6 +5,8 @@ from baseball_query.abc import DBMetric, BaseDBManager
 
 
 class FakeDBManager(BaseDBManager):
+    """Test double that records and returns predefined query data."""
+
     def __init__(self, return_data):
         # return_data may be a list or dict mapping query string to data
         self.return_data = return_data
@@ -53,6 +55,8 @@ class FakeDBManager(BaseDBManager):
 
 
 class FakeCache:
+    """Minimal cache stub supplying metrics for tests."""
+
     def __init__(self, metrics_dict):
         self.metrics_dict = metrics_dict
 

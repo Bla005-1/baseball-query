@@ -2,6 +2,8 @@ from .errors import EmptyQueryError
 from typing import Self
 
 class SQLQuery:
+    """Lightweight helper for composing SQL statements."""
+
     def __init__(self):
         self.select = []
         self.from_table = None
@@ -59,6 +61,8 @@ class SQLQuery:
 
 
 class BaseStrSQLQuery(SQLQuery):
+    """SQLQuery seeded with an initial SELECT statement."""
+
     def __init__(self, base_query: str):
         super().__init__()
         self.base_query = base_query
