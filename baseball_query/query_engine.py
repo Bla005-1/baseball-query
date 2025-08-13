@@ -1,6 +1,5 @@
 from typing import List, Dict, Type, Optional, overload
 import pandas as pd
-import time
 from .async_db import DBManager
 from .cache_manager import ConstantsCache
 from .queries import PlaysBuilder, TotalsBuilder
@@ -70,21 +69,14 @@ class BaseballQueryClient(BaseQueryFactory):
         return builder
 
     async def fetch_data(self, query_builder: BuilderT, skip_processor = False) -> pd.DataFrame:
-        start = time.perf_counter()
         data = await self.db_manager.fetch_all(query_builder.get_query(), query_builder.get_args())
         df = pd.DataFrame(data)
-        print(f'First fetch took {time.perf_counter() - start} seconds')
         if skip_processor:
             return df
         p = Processor(query_builder, self)
-        start = time.perf_counter()
         if query_builder.player_type == 'batter':
-            d = await p.calculate_batter_rows(df)
-            print(f'Batter calcs took {time.perf_counter() - start} seconds')
-            return d
+            return await p.calculate_batter_rows(df)
         elif query_builder.player_type == 'pitcher':
-            d = await p.calculate_pitcher_rows(df)
-            print(f'Pitcher calcs took {time.perf_counter() - start} seconds')
-            return d
+            return await p.calculate_pitcher_rows(df)
         else:
             raise ValueError(f'Unknown player type: {query_builder.player_type}')

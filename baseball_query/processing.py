@@ -72,10 +72,8 @@ class Processor:
                     metric.add_row(row)
                 try:
                     results.update(metric.calculate(temp_df))
-                except Exception as e:
-                    print(temp_df.to_dict())
-                    print(temp_df)
-                    raise e
+                except Exception:
+                    raise
             return index, results
 
     async def apply_per_row(self, df: pd.DataFrame) -> pd.DataFrame:
