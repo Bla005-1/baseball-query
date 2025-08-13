@@ -16,6 +16,8 @@ DB_CONFIG = {
 
 
 class DBManager(BaseDBManager):
+    """Async MySQL manager for executing baseball queries."""
+
     def __init__(self, db_config: Dict[str, str] = None, pool_size: int = 10):
         if db_config is None:
             self.db_config = DB_CONFIG

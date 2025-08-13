@@ -21,6 +21,8 @@ def add_coordinates(coord_str: str) -> Tuple[float, float]:
 
 
 class Processor:
+    """Handle post-query metric calculations for each result row."""
+
     def __init__(self, query_builder: BaseQueryBuilder, query_factory: BaseQueryFactory, max_concurrent: int = 10):
         self.query_builder = query_builder
         self.query_factory = query_factory
@@ -72,10 +74,8 @@ class Processor:
                     metric.add_row(row)
                 try:
                     results.update(metric.calculate(temp_df))
-                except Exception as e:
-                    print(temp_df.to_dict())
-                    print(temp_df)
-                    raise e
+                except Exception:
+                    raise
             return index, results
 
     async def apply_per_row(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -104,8 +104,8 @@ class Processor:
 
     async def calculate_batter_rows(self, df: pd.DataFrame) -> pd.DataFrame:
         python_metrics = self.query_builder.python_metrics
-        if 'OBS' in python_metrics:
-            df['OBS'] = df['OBP'] + df['SLG']
+        if 'OPS' in python_metrics:
+            df['OPS'] = df['OBP'] + df['SLG']
         return await self.create_and_calculate_metrics(df)
 
     async def calculate_pitcher_rows(self, df: pd.DataFrame) -> pd.DataFrame:

@@ -4,6 +4,8 @@ from .abc import BaseDBManager, DBMetric, BaseCache
 
 
 class ConstantsCache(BaseCache):
+    """Simple in-memory cache for database constants and metrics."""
+
     def __init__(self, db_manager: BaseDBManager, ttl: int = 3600):
         if not hasattr(self, 'cache'):
             self.db_manager = db_manager

@@ -3,6 +3,8 @@ from typing import *
 from abc import ABC, abstractmethod
 
 class DBMetric:
+    """Represents metadata for a metric stored in the database."""
+
     def __init__(self, data: Dict):
         self.metric_name = data.get('metric_name')
         self.sql_value = data.get('sql_value', None)
@@ -29,6 +31,8 @@ class DBMetric:
         )
 
 class BaseQueryBuilder(ABC):
+    """Abstract builder for assembling SQL queries."""
+
     def __init__(self, player_type):
         self.player_type = player_type
         self.empty = False
@@ -95,6 +99,8 @@ class BaseQueryBuilder(ABC):
         return not self.empty
 
 class BaseDBManager(ABC):
+    """Interface for asynchronous database operations."""
+
     @abstractmethod
     async def initialize_pool(self):
         pass
@@ -120,6 +126,8 @@ class BaseDBManager(ABC):
         pass
 
 class BaseCache(ABC):
+    """Interface for caching database lookups."""
+
     cache: Any
     db_manager: BaseDBManager
 
@@ -159,6 +167,8 @@ class BaseCache(ABC):
 BuilderT = TypeVar('BuilderT', bound=BaseQueryBuilder)
 
 class BaseQueryFactory(ABC):
+    """Factory interface for creating and executing queries."""
+
     db_manager: BaseDBManager = None
     cache = None
 
@@ -180,6 +190,8 @@ class BaseQueryFactory(ABC):
         pass
 
 class VectorizedMetric(ABC):
+    """Base class for metrics computed with vectorized pandas operations."""
+
     def __init__(self, names: str | List[str], dependencies: Tuple[str, ...]):
         if isinstance(names, str):
             names = [names]
